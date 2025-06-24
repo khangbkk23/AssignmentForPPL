@@ -28,7 +28,7 @@ options{
 /*------------------------------------------------------------------
  *  PARSER RULES
  *------------------------------------------------------------------*/
-program:  EOF;
+program: declaration+ EOF;
 
 declaration
     : variableDecl
@@ -253,25 +253,22 @@ fragment EXP : [eE] [+-]? DIGIT+ ;
 
 
 STRING_LIT
-    : '"' (VALID_SEQ | ASCII_CHAR)* '"'
-    {
-        self.text = self.text[1:-1]
-    }
-    ;
+    : '"' (VALID_SEQ | ASCII_CHAR)* '"' { self.text = self.text[1:-1]} ;
 
-fragment VALID_SEQ
-    : '\\' [ntr"\\]
-    ;
+fragment VALID_SEQ  : '\\' [ntr"\\];
 
-fragment ASCII_CHAR
-    : ~["\\\r\n\u0080-\uFFFF]
-    ;
+fragment ASCII_CHAR : ~["\\\r\n\u0080-\uFFFF] ;
 
 
 /* Error tokens for strings */
-UNCLOSE_STRING  : '"' (VALID_SEQ | ASCII_CHAR)* EOF {self.text = self.text[1:]} ;
+UNCLOSE_STRING  : '"' (VALID_SEQ | ASCII_CHAR)* EOF {
+        text = self.text[1:]
+        if text[-1:] in ['\n', '\r']:
+            text = text[:-1]  # Bỏ ký tự xuống dòng
+        raise UncloseString(text)
+    } ;
 
-ILLEGAL_ESCAPE  : '"' (VALID_SEQ | ASCII_CHAR)* '\\' ~[ntr"\\\r\n] (~["\r\n])* '"' { self.text = self.text[1:-1] };
+ILLEGAL_ESCAPE  : '"' (VALID_SEQ | ASCII_CHAR)* '\\' ~[ntr"\\\r\n] (~["\r\n])* '"' { raise IllegalEscape(self.text[1:-1]) };
 
 /* Comments & Whitespace */
 LINE_COMMENT    : '//' ~[\r\n]* -> skip ;
