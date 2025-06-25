@@ -1,83 +1,83 @@
 from utils import Tokenizer
 
-def test_001():
+def test_001a():
     """Test basic identifier tokenization"""
     source = "abc"
     expected = "abc,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_002():
+def test_002a():
     """Test keywords recognition"""
     source = "func main if else while for let const"
     expected = "func,main,if,else,while,for,let,const,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_003():
+def test_003a():
     """Test integer literals"""
     source = "42 0 -17 007"
     expected = "42,0,-,17,007,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_004():
+def test_004a():
     """Test float literals"""
     source = "3.14 -2.5 0.0 42. 5."
     expected = "3.14,-,2.5,0.0,42.,5.,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_005():
+def test_005a():
     """Test boolean literals"""
     source = "true false"
     expected = "true,false,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_006():
+def test_006a():
     """Test unclosed string literal error"""
     source = '"Hello World'
     expected = "Unclosed String: Hello World"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_007():
+def test_007a():
     """Test illegal escape sequence error"""
     source = '"Hello \\x World"'
     expected = "Illegal Escape In String: Hello \\x World"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_008():
+def test_008a():
     """Test error character (non-ASCII or invalid character)"""
     source = "let x = 5; @ invalid"
     expected = "let,x,=,5,;,Error Token @"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_009():
+def test_009a():
     """Test valid string literals with escape sequences"""
     source = '"Hello World" "Line 1\\nLine 2" "Quote: \\"text\\""'
     expected = "Hello World,Line 1\\nLine 2,Quote: \\\"text\\\",EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_009a():
+def test_009b():
     """Test string literals return content without quotes"""
     source = '"Hello World"'
     expected = "Hello World,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_009b():
+def test_009c():
     """Test empty string literal"""
     source = '""'
     expected = ",EOF"  # Empty string content
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 
-def test_010():
+def test_010a():
     """Test operators and separators"""
     source = "+ - * / % == != < <= > >= && || ! = -> >> ( ) [ ] { } , ; :"
     expected = "+,-,*,/,%,==,!=,<,<=,>,>=,&&,||,!,=,->,>>,(,),[,],{,},,,;,:,EOF"
