@@ -6,13 +6,11 @@ def test_001a():
     expected = "abc,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-
 def test_002a():
     """Test keywords recognition"""
     source = "func main if else while for let const"
     expected = "func,main,if,else,while,for,let,const,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
-
 
 def test_003a():
     """Test integer literals"""
@@ -20,13 +18,11 @@ def test_003a():
     expected = "42,0,-,17,007,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-
 def test_004a():
     """Test float literals"""
     source = "3.14 -2.5 0.0 42. 5."
     expected = "3.14,-,2.5,0.0,42.,5.,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
-
 
 def test_005a():
     """Test boolean literals"""
@@ -34,13 +30,11 @@ def test_005a():
     expected = "true,false,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-
 def test_006a():
     """Test unclosed string literal error"""
     source = '"Hello World'
     expected = "Unclosed String: Hello World"
     assert Tokenizer(source).get_tokens_as_string() == expected
-
 
 def test_007a():
     """Test illegal escape sequence error"""
@@ -48,13 +42,11 @@ def test_007a():
     expected = "Illegal Escape In String: Hello \\x World"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-
 def test_008a():
     """Test error character (non-ASCII or invalid character)"""
     source = "let x = 5; @ invalid"
     expected = "let,x,=,5,;,Error Token @"
     assert Tokenizer(source).get_tokens_as_string() == expected
-
 
 def test_009a():
     """Test valid string literals with escape sequences"""
@@ -62,20 +54,17 @@ def test_009a():
     expected = "Hello World,Line 1\\nLine 2,Quote: \\\"text\\\",EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-
 def test_009b():
     """Test string literals return content without quotes"""
     source = '"Hello World"'
     expected = "Hello World,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-
 def test_009c():
     """Test empty string literal"""
     source = '""'
     expected = ",EOF"  # Empty string content
     assert Tokenizer(source).get_tokens_as_string() == expected
-
 
 def test_010a():
     """Test operators and separators"""
@@ -580,181 +569,121 @@ def test_080():
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_081():
-    """Test unclosed string #11"""
-    source = '"U0Dt\n'
-    expected = "Unclosed String: U0Dt"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_082():
-    """Test unclosed string #12"""
-    source = '"aqTn9K\n'
-    expected = "Unclosed String: aqTn9K"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_083():
-    """Test unclosed string #13"""
-    source = '"OjJWX\n'
-    expected = "Unclosed String: OjJWX"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_084():
-    """Test unclosed string #14"""
-    source = '"5ulhVHkhVk\n'
-    expected = "Unclosed String: 5ulhVHkhVk"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_085():
-    """Test unclosed string #15"""
-    source = '"6hAw7K9Fw'
-    expected = "Unclosed String: 6hAw7K9Fw"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_086():
-    """Test unclosed string #16"""
-    source = '"FIdx3dD\n'
-    expected = "Unclosed String: FIdx3dD"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_087():
-    """Test unclosed string #17"""
-    source = '"scPn2'
-    expected = "Unclosed String: scPn2"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_088():
-    """Test unclosed string #18"""
-    source = '"kJI3bjC'
-    expected = "Unclosed String: kJI3bjC"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_089():
-    """Test unclosed string #19"""
-    source = '"7wgQN\n'
-    expected = "Unclosed String: 7wgQN"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_090():
-    """Test unclosed string #20"""
-    source = '"jg1lXHt'
-    expected = "Unclosed String: jg1lXHt"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_091():
     """Test illegal escape string #01"""
     source = '"1oMZQXi\\1 more text"'
     expected = "Illegal Escape In String: 1oMZQXi\\1 more text"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_092():
+def test_082():
     """Test illegal escape string #02"""
     source = '"kxRt4\\@ more text"'
     expected = "Illegal Escape In String: kxRt4\\@ more text"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_093():
+def test_083():
     """Test illegal escape string #03"""
     source = '"1FV9\\` more text"'
     expected = "Illegal Escape In String: 1FV9\\` more text"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_094():
+def test_084():
     """Test illegal escape string #04"""
     source = '"1bqlgb\\$ more text"'
     expected = "Illegal Escape In String: 1bqlgb\\$ more text"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_095():
+def test_085():
     """Test illegal escape string #05"""
-    source = '"3w3Ng\\_ more text"'
-    expected = "Illegal Escape In String: 3w3Ng\\_ more text"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_096():
-    """Test illegal escape string #06"""
-    source = '"7KiS\\1 more text"'
-    expected = "Illegal Escape In String: 7KiS\\1 more text"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_097():
-    """Test illegal escape string #07"""
-    source = '"V9fFB\\# more text"'
-    expected = "Illegal Escape In String: V9fFB\\# more text"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_098():
-    """Test illegal escape string #08"""
     source = '"OrV3ooc0\\2 more text"'
     expected = "Illegal Escape In String: OrV3ooc0\\2 more text"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_099():
-    """Test illegal escape string #09"""
+def test_086():
+    """Test illegal escape string #06"""
     source = '"0pzah\\^ more text"'
     expected = "Illegal Escape In String: 0pzah\\^ more text"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_100():
-    """Test illegal escape string #10"""
+def test_87():
+    """Test illegal escape string #07"""
     source = '"37pV \\3 more text"'
     expected = "Illegal Escape In String: 37pV \\3 more text"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_101():
-    """Test illegal escape string #11"""
+def test_88():
+    """Test illegal escape string #08"""
     source = '"ziqv0B\\& more text"'
     expected = "Illegal Escape In String: ziqv0B\\& more text"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_102():
-    """Test illegal escape string #12"""
-    source = '"pLWO\\_ more text"'
-    expected = "Illegal Escape In String: pLWO\\_ more text"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_103():
-    """Test illegal escape string #13"""
-    source = '"4udW\\^ more text"'
-    expected = "Illegal Escape In String: 4udW\\^ more text"
-    assert Tokenizer(source).get_tokens_as_string() == expected
-
-def test_104():
-    """Test illegal escape string #14"""
+def test_89():
+    """Test illegal escape string #09"""
     source = '"gEhYENU1\\1 more text"'
     expected = "Illegal Escape In String: gEhYENU1\\1 more text"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_105():
-    """Test illegal escape string #15"""
+def test_90():
+    """Test illegal escape string #10"""
     source = '"DHpUB8\\& more text"'
     expected = "Illegal Escape In String: DHpUB8\\& more text"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_106():
-    """Test illegal escape string #16"""
-    source = '"cIQnP K\\^ more text"'
-    expected = "Illegal Escape In String: cIQnP K\\^ more text"
+def test_091():
+    """Test ERROR_TOKEN with @"""
+    source = "@"
+    expected = "Error Token @"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_107():
-    """Test illegal escape string #17"""
-    source = '"OLKPnJgr\\~ more text"'
-    expected = "Illegal Escape In String: OLKPnJgr\\~ more text"
+def test_092():
+    """Test ERROR_TOKEN with #"""
+    source = "#"
+    expected = "Error Token #"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_108():
-    """Test illegal escape string #18"""
-    source = '"EINgvioJ\\$ more text"'
-    expected = "Illegal Escape In String: EINgvioJ\\$ more text"
+def test_093():
+    """Test ERROR_TOKEN with Unicode character"""
+    source = "🙂"
+    expected = "Error Token 🙂"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_109():
-    """Test illegal escape string #19"""
-    source = '"A2BL6u\\1 more text"'
-    expected = "Illegal Escape In String: A2BL6u\\1 more text"
+def test_094():
+    """Test ERROR_TOKEN with dollar sign"""
+    source = "$"
+    expected = "Error Token $"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
-def test_110():
-    """Test illegal escape string #20"""
-    source = '"k7WXQ\\^ more text"'
-    expected = "Illegal Escape In String: k7WXQ\\^ more text"
+def test_095():
+    """Test ERROR_TOKEN with percent sign in invalid place"""
+    source = "&"
+    expected = "Error Token &"
+    assert Tokenizer(source).get_tokens_as_string() == expected
+
+def test_096():
+    """Test ERROR_TOKEN with backtick"""
+    source = "`"
+    expected = "Error Token `"
+    assert Tokenizer(source).get_tokens_as_string() == expected
+
+def test_097():
+    """Test ERROR_TOKEN with single quote"""
+    source = "'"
+    expected = "Error Token '"
+    assert Tokenizer(source).get_tokens_as_string() == expected
+
+def test_098():
+    """Test ERROR_TOKEN with vertical bar (should not be confused with ||)"""
+    source = "|"
+    expected = "Error Token |"
+    assert Tokenizer(source).get_tokens_as_string() == expected
+
+def test_099():
+    """Test ERROR_TOKEN with unicode math symbol"""
+    source = "∆"
+    expected = "Error Token ∆"
+    assert Tokenizer(source).get_tokens_as_string() == expected
+
+def test_100():
+    """Test ERROR_TOKEN with multiple invalid chars"""
+    source = "@#€"
+    expected = "Error Token @"
     assert Tokenizer(source).get_tokens_as_string() == expected
