@@ -261,15 +261,23 @@ fragment ASCII_CHAR : ~["\\\r\n\u0080-\uFFFF] ;
 
 
 /* Error tokens for strings */
-UNCLOSE_STRING  : '"' (VALID_SEQ | ASCII_CHAR)* EOF {
+UNCLOSE_STRING
+    : '"' (VALID_SEQ | ASCII_CHAR)* ([\r\n] | EOF)
+    {
         text = self.text[1:]
         if text[-1:] in ['\n', '\r']:
-            text = text[:-1]  # Bỏ ký tự xuống dòng
+            text = text[:-1]
         raise UncloseString(text)
-    } ;
+    }
+    ;
 
-ILLEGAL_ESCAPE  : '"' (VALID_SEQ | ASCII_CHAR)* '\\' ~[ntr"\\\r\n] (~["\r\n])* '"' { raise IllegalEscape(self.text[1:-1]) };
-
+ILLEGAL_ESCAPE
+    : '"' (VALID_SEQ | ASCII_CHAR)* '\\' ~[ntr"\\\r\n] ( ~["\r\n] )* '"'
+    {
+        raise IllegalEscape(self.text[1:-1])
+    }
+    ;
+    
 /* Comments & Whitespace */
 LINE_COMMENT    : '//' ~[\r\n]* -> skip ;
 
