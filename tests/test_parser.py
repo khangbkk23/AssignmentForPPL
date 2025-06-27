@@ -707,7 +707,7 @@ def test_076():
 
 def test_077():
     """Test wrong arrow in function"""
-    source = """func main() → int { return 1; }"""
+    source = """func main() -> int { return 1; }"""
     expected = "failure"
     assert Parser(source).parse() == expected
 

@@ -28,40 +28,23 @@ options{
 /*------------------------------------------------------------------
  *  PARSER RULES
  *------------------------------------------------------------------*/
-program: declaration+ EOF;
+program: decl+ EOF;
 
-declaration
-    : variableDecl
-    | constDecl
-    | functionDecl
-    ;
+decl: vardecl| constdecl | funcdecl ;
 
-    variableDecl
-    : LET ID (':' typeSpec)? '=' expression ';'
-    ;
+vardecl : LET ID (COLON typeSpec)? EQ exp SEMI ;
 
-constDecl
-    : CONST ID (':' typeSpec)? '=' expression ';'
-    ;
+constdecl: CONST ID (COLON typeSpec)? EQ exp SEMI ;
 
-functionDecl
-    : FUNC ID '(' paramList? ')' ARROW typeSpec block
-    ;
+funcdecl: FUNC ID LPAREN paramlst? RPAREN ARROW typeSpec block;
 
-paramList
-    : param (',' param)*
-    ;
+paramlst: param (COMMA param)*;
 
-param
-    : ID ':' typeSpec
-    ;
+param: ID EQ typeSpec ;
 
-typeSpec
-    : primitiveType
-    | arrayType
-    ;
+typeSpec: dataType | arrayType;
 
-primitiveType
+dataType
     : INT
     | FLOAT
     | BOOL
@@ -70,16 +53,16 @@ primitiveType
     ;
 
 arrayType
-    : '[' typeSpec ';' INT_LIT ']'
+    : LBRACK typeSpec SEMI INT_LIT RBRACK
     ;
 
 block
-    : '{' statement* '}'
+    : LBRACE stm* RBRACE
     ;
 
-statement
-    : variableDecl
-    | constDecl
+stm
+    : vardecl
+    | constdecl
     | assignment
     | ifStmt
     | whileStmt
@@ -87,74 +70,59 @@ statement
     | breakStmt
     | continueStmt
     | returnStmt
-    | expressionStmt
+    | expStmt
     | block
     ;
 
-assignment
-    : lvalue '=' expression ';'
+assignment  : lvalue EQ exp SEMI ;
+
+ifStmt      : IF LPAREN exp RPAREN block (ELSE block)? ;
+
+whileStmt   : WHILE LPAREN exp RPAREN block ;
+
+forStmt     : FOR LPAREN ID IN exp RPAREN block
     ;
 
-ifStmt
-    : IF '(' expression ')' block (ELSE block)?
-    ;
+breakStmt   : BREAK SEMI ;
 
-whileStmt
-    : WHILE '(' expression ')' block
-    ;
+continueStmt    : CONTINUE SEMI ;
 
-forStmt
-    : FOR '(' ID IN expression ')' block
-    ;
+returnStmt  : RETURN exp? SEMI ;
 
-breakStmt
-    : BREAK ';'
-    ;
+expStmt: exp SEMI ;
 
-continueStmt    : CONTINUE ';' ;
-
-returnStmt  : RETURN expression? ';' ;
-
-expressionStmt: expression ';' ;
-
-/* Expression precedence climbing (lowest -> highest)
+/* exp precedence climbing (lowest -> highest)
    pipeline (>>) lowest precedence, unary highest      */
 
-expression  : pipelineExpr ;
+exp  : pipelineExpr ;
 
-pipelineExpr    : logicOrExpr ('>>' logicOrExpr)* ;
+pipelineExpr    : logicOrExpr (PIPE logicOrExpr)* ;
 
-logicOrExpr : logicAndExpr ('||' logicAndExpr)* ;
+logicOrExpr : logicAndExpr (OR logicAndExpr)* ;
 
-logicAndExpr: equalExpr ('&&' equalExpr)* ;
+logicAndExpr: equalExpr (AND equalExpr)* ;
 
-equalExpr: relationExpr (('==' | '!=') relationExpr)* ;
+equalExpr: relationExpr ((EQ | NEQ) relationExpr)* ;
 
-relationExpr : addiExpr (('<' | '<=' | '>' | '>=') addiExpr)* ;
+relationExpr : addiExpr ((LT | LE | GT | GE) addiExpr)* ;
 
-addiExpr    : canMulExpr (('+' | '-') canMulExpr)* ;
+addiExpr    : canMulExpr ((PLUS | MINUS) canMulExpr)* ;
 
-canMulExpr  : unaryExpr (('*' | '/' | '%') unaryExpr)* ;
+canMulExpr  : unaryExpr ((MUL | DIV | MOD) unaryExpr)* ;
 
-unaryExpr   : ('!' | '+' | '-') unaryExpr | postfixExpr ;
+unaryExpr   : (NOT | PLUS | MINUS) unaryExpr | postfixExpr ;
 
 postfixExpr
     : primaryExpr
-      ( '[' expression ']'
-      | '(' argList? ')'
+      ( LBRACK exp RBRACK
+      | LPAREN arglst? RPAREN
       )*
     ;
 
 
-argList
-    : expression (',' expression)*
-    ;
+arglst: exp (COMMA exp)* ;
 
-primaryExpr
-    : literal
-    | ID
-    | '(' expression ')'
-    ;
+primaryExpr: literal | ID | LBRACK exp RBRACK;
 
 literal
     : INT_LIT
@@ -166,14 +134,11 @@ literal
     ;
 
 
-lvalue
-    : ID                             // x
-    | ID '[' expression ']'         // x[0]
-    ;
+lvalue: ID | ID LBRACK exp RBRACK;
 
-arrayLiteral : '[' expressionList? ']' ;
+arrayLiteral : LBRACK explst? RBRACK ;
 
-expressionList  : expression (',' expression)* ;
+explst  : exp (COMMA exp)* ;
 
     
 /*------------------------------------------------------------------
@@ -207,7 +172,7 @@ VOID    : 'void' ;
 // Arithmetic
 PLUS    : '+' ;
 MINUS   : '-' ;
-MULTI   : '*' ;
+MUL     : '*' ;
 DIV     : '/' ;
 MOD     : '%' ;
 
@@ -235,7 +200,7 @@ RBRACE   : '}' ;
 
 // Sign
 COLON   : ':' ;
-SCOLON  : ';' ;
+SEMI    : ';' ;
 COMMA   : ',' ;
 DOT     : '.' ;
 
@@ -253,9 +218,13 @@ fragment EXP : [eE] [+-]? DIGIT+ ;
 
 
 STRING_LIT
-    : '"' (VALID_SEQ | ASCII_CHAR)* '"' { self.text = self.text[1:-1]} ;
+    : '"' (VALID_SEQ | ASCII_CHAR)* '"' 
+    {
+        self.text = self.text[1:-1]
+    }
+    ;
 
-fragment VALID_SEQ  : '\\' [ntr"\\];
+fragment VALID_SEQ  : '\\' [ntr"\\] ;
 
 fragment ASCII_CHAR : ~["\\\r\n\u0080-\uFFFF] ;
 
@@ -283,8 +252,7 @@ LINE_COMMENT    : '//' ~[\r\n]* -> skip ;
 
 BLOCK_COMMENT   : '/*' .*? '*/' -> skip ;
 
-WS
-    : [ \t\r\n]+ -> skip ;
+WS  : [ \t\r\n]+ -> skip ;
 
 /* Catch-all error character */
 ERROR_CHAR : . ;
