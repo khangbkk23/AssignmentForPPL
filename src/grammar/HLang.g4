@@ -36,9 +36,11 @@ vardecl : LET ID (COLON typeSpec)? EQ exp SEMI ;
 
 constdecl: CONST ID (COLON typeSpec)? EQ exp SEMI ;
 
-funcdecl: FUNC ID LPAREN paramlst? RPAREN ARROW typeSpec block;
+funcdecl: FUNC ID LPAREN paramlist RPAREN ARROW typeSpec body;
 
-paramlst: param (COMMA param)*;
+paramlist: paramprime ;
+
+paramprime: param COMMA paramprime | param;
 
 param: ID EQ typeSpec ;
 
@@ -52,15 +54,14 @@ dataType
     | VOID
     ;
 
-arrayType
-    : LBRACK typeSpec SEMI INT_LIT RBRACK
-    ;
+arrayType: LBRACK typeSpec SEMI INT_LIT RBRACK;
 
-block
-    : LBRACE stm* RBRACE
-    ;
+body: LBRACE stmtlist RBRACE;
 
-stm
+stmtlist: stmt stmtlist | ;
+
+
+stmt
     : vardecl
     | constdecl
     | assignment
@@ -71,16 +72,16 @@ stm
     | continueStmt
     | returnStmt
     | expStmt
-    | block
+    | body
     ;
 
 assignment  : lvalue EQ exp SEMI ;
 
-ifStmt      : IF LPAREN exp RPAREN block (ELSE block)? ;
+ifStmt      : IF LPAREN exp RPAREN body (ELSE body)? ;
 
-whileStmt   : WHILE LPAREN exp RPAREN block ;
+whileStmt   : WHILE LPAREN exp RPAREN body ;
 
-forStmt     : FOR LPAREN ID IN exp RPAREN block
+forStmt     : FOR LPAREN ID IN exp RPAREN body
     ;
 
 breakStmt   : BREAK SEMI ;
@@ -115,12 +116,12 @@ unaryExpr   : (NOT | PLUS | MINUS) unaryExpr | postfixExpr ;
 postfixExpr
     : primaryExpr
       ( LBRACK exp RBRACK
-      | LPAREN arglst? RPAREN
+      | LPAREN arglist? RPAREN
       )*
     ;
 
 
-arglst: exp (COMMA exp)* ;
+arglist: exp (COMMA exp)* ;
 
 primaryExpr: literal | ID | LBRACK exp RBRACK;
 
@@ -136,9 +137,9 @@ literal
 
 lvalue: ID | ID LBRACK exp RBRACK;
 
-arrayLiteral : LBRACK explst? RBRACK ;
+arrayLiteral : LBRACK explist? RBRACK ;
 
-explst  : exp (COMMA exp)* ;
+explist  : exp (COMMA exp)* ;
 
     
 /*------------------------------------------------------------------
