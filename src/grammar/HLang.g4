@@ -28,120 +28,143 @@ options{
 /*------------------------------------------------------------------
  *  PARSER RULES
  *------------------------------------------------------------------*/
-program: decl+ EOF;
+// Entry point
+program: decllist EOF ;
 
-decl: vardecl| constdecl | funcdecl ;
+decllist: decl decllistTail ;
 
-vardecl : LET ID (COLON typeSpec)? EQ exp SEMI ;
+decllistTail: decl decllistTail | ;
 
-constdecl: CONST ID (COLON typeSpec)? EQ exp SEMI ;
+decl: vardecl | constdecl | funcdecl;
 
-funcdecl: FUNC ID LPAREN paramlist RPAREN ARROW typeSpec body;
+// Variable and constant declarations
+vardecl: LET ID typeOpt ASSIGN expr SEMI;
 
-paramlist: paramprime ;
+constdecl: CONST ID typeOpt ASSIGN expr SEMI;
 
-paramprime: param COMMA paramprime | param;
-
-param: ID EQ typeSpec ;
+typeOpt: COLON typeSpec | ;
 
 typeSpec: dataType | arrayType;
-
-dataType
-    : INT
-    | FLOAT
-    | BOOL
-    | STRING
-    | VOID
-    ;
+dataType: INT | FLOAT | BOOL | STRING | VOID;
 
 arrayType: LBRACK typeSpec SEMI INT_LIT RBRACK;
 
-body: LBRACE stmtlist RBRACE;
+// Function declaration
+funcdecl: FUNC ID LPAREN paramOpt RPAREN ARROW typeSpec blockStmt ;
 
-stmtlist: stmt stmtlist | ;
+paramOpt: param paramTail | ;
 
+paramTail: COMMA param paramTail | ;
+
+param: ID COLON typeSpec;
+
+// Statements
+stmtList: stmt stmtList | ;
 
 stmt
     : vardecl
     | constdecl
-    | assignment
+    | assignStmt
     | ifStmt
     | whileStmt
     | forStmt
     | breakStmt
     | continueStmt
     | returnStmt
-    | expStmt
-    | body
-    ;
+    | exprStmt
+    | blockStmt;
 
-assignment  : lvalue EQ exp SEMI ;
+assignStmt: lvalue ASSIGN expr SEMI;
 
-ifStmt      : IF LPAREN exp RPAREN body (ELSE body)? ;
+ifStmt: IF LPAREN expr RPAREN blockStmt elseifTail elseOpt;
 
-whileStmt   : WHILE LPAREN exp RPAREN body ;
+elseifTail: ELSE IF LPAREN expr RPAREN blockStmt elseifTail | ;
 
-forStmt     : FOR LPAREN ID IN exp RPAREN body
-    ;
+elseOpt: ELSE blockStmt | ;
 
-breakStmt   : BREAK SEMI ;
+whileStmt: WHILE LPAREN expr RPAREN blockStmt;
 
-continueStmt    : CONTINUE SEMI ;
+forStmt: FOR LPAREN ID IN expr RPAREN blockStmt;
 
-returnStmt  : RETURN exp? SEMI ;
+breakStmt: BREAK SEMI;
 
-expStmt: exp SEMI ;
+continueStmt: CONTINUE SEMI;
 
-/* exp precedence climbing (lowest -> highest)
-   pipeline (>>) lowest precedence, unary highest      */
+returnStmt: RETURN exprReturn SEMI;
 
-exp  : pipelineExpr ;
+exprReturn: expr | ;
 
-pipelineExpr    : logicOrExpr (PIPE logicOrExpr)* ;
+exprStmt: expr SEMI;
 
-logicOrExpr : logicAndExpr (OR logicAndExpr)* ;
-
-logicAndExpr: equalExpr (AND equalExpr)* ;
-
-equalExpr: relationExpr ((EQ | NEQ) relationExpr)* ;
-
-relationExpr : addiExpr ((LT | LE | GT | GE) addiExpr)* ;
-
-addiExpr    : canMulExpr ((PLUS | MINUS) canMulExpr)* ;
-
-canMulExpr  : unaryExpr ((MUL | DIV | MOD) unaryExpr)* ;
-
-unaryExpr   : (NOT | PLUS | MINUS) unaryExpr | postfixExpr ;
-
-postfixExpr
-    : primaryExpr
-      ( LBRACK exp RBRACK
-      | LPAREN arglist? RPAREN
-      )*
-    ;
+blockStmt: LBRACE stmtList RBRACE;
 
 
-arglist: exp (COMMA exp)* ;
-
-primaryExpr: literal | ID | LBRACK exp RBRACK;
-
-literal
-    : INT_LIT
-    | FLOAT_LIT
-    | STRING_LIT
-    | TRUE
-    | FALSE
-    | arrayLiteral
-    ;
+// Expressions
+expr: pipelineExpr;
 
 
-lvalue: ID | ID LBRACK exp RBRACK;
+pipelineExpr: logicOrExpr pipelineExprTail;
 
-arrayLiteral : LBRACK explist? RBRACK ;
+pipelineExprTail: PIPE logicOrExpr pipelineExprTail | ;
 
-explist  : exp (COMMA exp)* ;
 
-    
+logicOrExpr: logicAndExpr logicOrExprTail;
+
+logicOrExprTail: OR logicAndExpr logicOrExprTail | ;
+
+
+logicAndExpr: equalExpr logicAndExprTail;
+
+logicAndExprTail: AND equalExpr logicAndExprTail | ;
+
+
+equalExpr: relExpr equalExprTail;
+
+equalExprTail: (EQ | NEQ) relExpr equalExprTail | ;
+
+
+relExpr: addiExpr relExprTail;
+
+relExprTail: (LT | LE | GT | GE) addiExpr relExprTail | ;
+
+
+addiExpr: multiExpr addiExprTail;
+
+addiExprTail: (PLUS | MINUS) multiExpr addiExprTail | ;
+
+
+multiExpr: unaryExpr multiExprTail;
+
+multiExprTail: (MUL | DIV | MOD) unaryExpr multiExprTail | ;
+
+
+unaryExpr: (NOT | PLUS | MINUS) unaryExpr | postfixExpr;
+
+
+postfixExpr: primaryExpr postfixExprTail;
+
+postfixExprTail: postfixOp postfixExprTail | ;
+
+postfixOp: LBRACK expr RBRACK | LPAREN argsOpt RPAREN;
+
+
+argsOpt: expr argTail | ;
+
+argTail: COMMA expr argTail | ;
+
+
+primaryExpr: literal | ID | LBRACK expr RBRACK;
+
+literal: INT_LIT | FLOAT_LIT | STRING_LIT | TRUE | FALSE | arrayLiteral;
+
+arrayLiteral: LBRACK exprOpt RBRACK;
+
+exprOpt: expr exprTail | ;
+
+exprTail: COMMA expr exprTail | ;
+
+lvalue: ID | ID LBRACK expr RBRACK;
+
 /*------------------------------------------------------------------
  *  LEXER RULES
  *------------------------------------------------------------------*/
