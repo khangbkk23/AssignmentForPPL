@@ -151,13 +151,11 @@ postfixExprTail: postfixOp postfixExprTail | ;
 
 postfixOp: LBRACK expr RBRACK | LPAREN argsOpt RPAREN;
 
-
 argsOpt: expr argTail | ;
 
 argTail: COMMA expr argTail | ;
 
-
-primaryExpr: literal | ID | LBRACK expr RBRACK;
+primaryExpr: literal | ID | LPAREN expr RPAREN | LBRACK expr RBRACK;
 
 literal: INT_LIT | FLOAT_LIT | STRING_LIT | TRUE | FALSE | arrayLiteral;
 
@@ -167,7 +165,9 @@ exprOpt: expr exprTail | ;
 
 exprTail: COMMA expr exprTail | ;
 
-lvalue: ID | ID LBRACK expr RBRACK;
+lvalue: ID indexTail;
+
+indexTail: LBRACK expr RBRACK indexTail | ;
 
 /*------------------------------------------------------------------
  *  LEXER RULES
