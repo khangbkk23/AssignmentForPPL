@@ -95,7 +95,7 @@ def test_010():
 def test_nt():
     """Test foo"""
     source = """func main() -> void {
-            a[2][3] := b[2][1].foo.foo + abc / xyz * foo() + 1235 % calculator.add(3,4)
+            a[2][3] = b[2][1].foo.foo + abc / xyz * foo() + 1235 % calculator.add(3,4)
         };"""
     expected = "success"
     assert Parser(source).parse() == expected

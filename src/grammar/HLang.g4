@@ -31,7 +31,7 @@ options{
 // Entry point
 program: decllist EOF ;
 
-decllist: decl decllistTail ;
+decllist: decl decllistTail | ;
 
 decllistTail: decl decllistTail | ;
 
@@ -45,6 +45,7 @@ constdecl: CONST ID typeOpt ASSIGN expr SEMI;
 typeOpt: COLON typeSpec | ;
 
 typeSpec: dataType | arrayType;
+
 dataType: INT | FLOAT | BOOL | STRING | VOID;
 
 arrayType: LBRACK typeSpec SEMI INT_LIT RBRACK;
@@ -59,7 +60,10 @@ paramTail: COMMA param paramTail | ;
 param: ID COLON typeSpec;
 
 // Statements
-stmtList: stmt stmtList | ;
+stmtList: stmt stmtListTail | ;
+
+stmtListTail: stmt stmtListTail | ;
+
 
 stmt
     : vardecl
@@ -170,8 +174,6 @@ lvalue: ID | ID LBRACK expr RBRACK;
  *------------------------------------------------------------------*/
 
 /* Keywords */
-ID : [a-zA-Z_][a-zA-Z0-9_]* ;
-
 LET     : 'let' ;
 CONST   : 'const' ;
 FUNC    : 'func' ;
@@ -191,6 +193,9 @@ FLOAT   : 'float' ;
 BOOL    : 'bool' ;
 STRING  : 'string' ;
 VOID    : 'void' ;
+
+/* Identifiers */
+ID : [a-zA-Z_][a-zA-Z0-9_]* ;
 
 /* Operators & Separators */
 // Arithmetic
@@ -214,7 +219,7 @@ OR      : '||' ;
 NOT     : '!' ;
 ASSIGN  : '=' ;
 
-// Seperators
+// Separators
 LBRACK   : '[' ;
 RBRACK   : ']' ;
 LPAREN   : '(' ;
@@ -237,7 +242,7 @@ PIPE     : '>>' ;
 INT_LIT     : DIGIT+ ;
 fragment DIGIT : [0-9] ;
 
-FLOAT_LIT   : DIGIT+ DOT DIGIT* EXP? | DOT DIGIT+ EXP? ;
+FLOAT_LIT   : (DIGIT+ DOT DIGIT* EXP?) | (DOT DIGIT+ EXP?) ;
 fragment EXP : [eE] [+-]? DIGIT+ ;
 
 
@@ -265,9 +270,11 @@ UNCLOSE_STRING
     ;
 
 ILLEGAL_ESCAPE
-    : '"' (VALID_SEQ | ASCII_CHAR)* '\\' ~[ntr"\\\r\n] ( ~["\r\n] )* '"'
+    : '"' (VALID_SEQ | ASCII_CHAR)* '\\' ~[ntr"\\]
     {
-        raise IllegalEscape(self.text[1:-1])
+        text = self.text[1:]
+        self.text = text
+        raise IllegalEscape(text)
     }
     ;
     
