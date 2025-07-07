@@ -63,3 +63,8 @@ class ASTGeneration(HLangVisitor):
         returnType = self.visit(ctx.typeSpec())
         body = self.visit(ctx.blockStmt())
         return FuncDecl(name, params, returnType, body.stmts)
+    
+    def visitParamOpt(self, ctx: HLangParser.ParamOptContext):
+        if ctx.getChildCount() == 0:
+            return []
+        return self.visit(ctx.paramList())
