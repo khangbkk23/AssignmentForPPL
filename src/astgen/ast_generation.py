@@ -68,3 +68,8 @@ class ASTGeneration(HLangVisitor):
         if ctx.getChildCount() == 0:
             return []
         return self.visit(ctx.paramList())
+
+    def visitParamList(self, ctx: HLangParser.ParamListContext):
+        param = self.visit(ctx.param())
+        tail = self.visit(ctx.paramListTail())
+        return [param] + tail
