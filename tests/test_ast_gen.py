@@ -79,3 +79,5 @@ def test_009():
     }"""
     expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(data), >>, Identifier(process)))])])"
     assert str(ASTGenerator(source).generate()) == expected
+
+# The 100 testcases below are modified by Duy Khang to complete the requirements of Assigment 2
