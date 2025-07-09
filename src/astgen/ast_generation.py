@@ -83,7 +83,7 @@ class ASTGeneration(HLangVisitor):
     def visitParam(self, ctx: HLangParser.ParamContext):
         param_name = ctx.ID().getText()
         param_type = self.visit(ctx.typeSpec())
-        return (param_name, param_type)
+        return Param(name=param_name, param_type=param_type)
     
     def visitParamOpt(self, ctx: HLangParser.ParamOptContext):
         if ctx.getChildCount() == 0:
@@ -127,7 +127,7 @@ class ASTGeneration(HLangVisitor):
     
     def visitIfStmt(self, ctx: HLangParser.IfStmtContext):
         cond = self.visit(ctx.expr())
-        thenStmt = self.visit(ctx.blockStmt(0))
+        thenStmt = self.visit(ctx.blockStmt())
         elseifList = self.visit(ctx.elseifTail())
         elseStmt = self.visit(ctx.elseOpt()) if ctx.elseOpt() else None
         return IfStmt(cond, thenStmt, elseifList, elseStmt)
@@ -142,7 +142,6 @@ class ASTGeneration(HLangVisitor):
 
     def visitElseOpt(self, ctx: HLangParser.ElseOptContext):
         return self.visit(ctx.blockStmt())
-
     
     def visitWhileStmt(self, ctx: HLangParser.WhileStmtContext):
         cond = self.visit(ctx.expr())
@@ -162,10 +161,23 @@ class ASTGeneration(HLangVisitor):
         return ContinueStmt()
     
     def visitReturnStmt(self, ctx: HLangParser.ReturnStmtContext):
-        return ReturnStmt(self.visit(ctx.exprReturn()))
+        if ctx.exprReturn():
+            expr_val = self.visit(ctx.exprReturn())
+            return ReturnStmt(expr_val)
+        else:
+            return ReturnStmt(None)
+        
+    def visitExprReturn(self, ctx: HLangParser.ExprReturnContext):
+        if ctx.expr():
+            return self.visit(ctx.expr())
+        return None
+    
+    def visitExprStmt(self, ctx: HLangParser.ExprStmtContext):
+        return ExprStmt(self.visit(ctx.expr()))
 
     def visitExpr(self, ctx: HLangParser.ExprContext):
         return self.visit(ctx.pipelineExpr())
+    
     
     def visitPipelineExpr(self, ctx: HLangParser.PipelineExprContext):
         left = self.visit(ctx.logicOrExpr())
@@ -186,8 +198,8 @@ class ASTGeneration(HLangVisitor):
             left = BinaryOp(left, "||", expr)
         return left
 
-    def visitLogicOrExprTail(self, ctx):
-        if not ctx.OR():
+    def visitLogicOrExprTail(self, ctx: HLangParser.LogicOrExprTailContext):
+        if not ctx.getChildCount():
             return []
         return [("||", self.visit(ctx.logicAndExpr()))] + (self.visit(ctx.logicOrExprTail()) or [])
     
@@ -199,19 +211,19 @@ class ASTGeneration(HLangVisitor):
         return left
 
     def visitLogicAndExprTail(self, ctx: HLangParser.LogicAndExprTailContext):
-        if not ctx.AND():
+        if not ctx.getChildCount():
             return []
         tail = self.visit(ctx.logicAndExprTail()) or []
         return [("&&", self.visit(ctx.equalExpr()))] + tail
     
-    def visitEqualExpr(self, ctx):
+    def visitEqualExpr(self, ctx: HLangParser.EqualExprContext):
         left = self.visit(ctx.relExpr())
         tail = self.visit(ctx.equalExprTail())
         for op, expr in tail:
             left = BinaryOp(left, op, expr)
         return left
 
-    def visitEqualExprTail(self, ctx):
+    def visitEqualExprTail(self, ctx: HLangParser.EqualExprTailContext):
         if not ctx.getChildCount():
             return []
         op = ctx.EQ().getText() if ctx.EQ() else ctx.NEQ().getText()
@@ -219,46 +231,47 @@ class ASTGeneration(HLangVisitor):
         tail = self.visit(ctx.equalExprTail()) or []
         return [(op, expr)] + tail
 
-    def visitRelExpr(self, ctx):
+    def visitRelExpr(self, ctx: HLangParser.RelExprContext):
         left = self.visit(ctx.addiExpr())
         tail = self.visit(ctx.relExprTail())
         for op, expr in tail:
             left = BinaryOp(left, op, expr)
         return left
 
-    def visitRelExprTail(self, ctx):
+    def visitRelExprTail(self, ctx: HLangParser.RelExprTailContext):
         if not ctx.getChildCount():
             return []
         op = ctx.getChild(0).getText()
         tail = self.visit(ctx.relExprTail()) or []
         return [(op, self.visit(ctx.addiExpr()))] + tail
 
-    def visitAddiExpr(self, ctx):
+    def visitAddiExpr(self, ctx: HLangParser.AddiExprContext):
         left = self.visit(ctx.multiExpr())
         tail = self.visit(ctx.addiExprTail())
         for op, expr in tail:
             left = BinaryOp(left, op, expr)
         return left
 
-    def visitAddiExprTail(self, ctx):
+    def visitAddiExprTail(self, ctx: HLangParser.AddiExprTailContext):
         if not ctx.getChildCount():
             return []
         op = ctx.PLUS().getText() if ctx.PLUS() else ctx.MINUS().getText()
         return [(op, self.visit(ctx.multiExpr()))] + (self.visit(ctx.addiExprTail()) or [])
 
-    def visitMultiExpr(self, ctx):
+    def visitMultiExpr(self, ctx: HLangParser.MultiExprContext):
         left = self.visit(ctx.unaryExpr())
         tail = self.visit(ctx.multiExprTail())
         for op, expr in tail:
             left = BinaryOp(left, op, expr)
         return left
 
-    def visitMultiExprTail(self, ctx):
-        if not ctx.getChildCount(): return []
+    def visitMultiExprTail(self, ctx: HLangParser.MultiExprTailContext):
+        if not ctx.getChildCount():
+            return []
         op = ctx.getChild(0).getText()
-        return [(op, self.visit(ctx.multiExpr()))] + (self.visit(ctx.addiExprTail()) or [])
+        return [(op, self.visit(ctx.unaryExpr()))] + (self.visit(ctx.multiExprTail()) or [])
 
-    def visitUnaryExpr(self, ctx):
+    def visitUnaryExpr(self, ctx: HLangParser.UnaryExprContext):
         if ctx.getChildCount() == 1:
             return self.visit(ctx.postfixExpr())
         else:
@@ -266,7 +279,7 @@ class ASTGeneration(HLangVisitor):
             operand = self.visit(ctx.unaryExpr())
             return UnaryOp(op, operand)
 
-    def visitPostfixExpr(self, ctx):
+    def visitPostfixExpr(self, ctx: HLangParser.PostfixExprContext):
         expr = self.visit(ctx.primaryExpr())
         ops = self.visit(ctx.postfixExprTail())
         return self.foldPostfix(expr, ops)
@@ -278,19 +291,19 @@ class ASTGeneration(HLangVisitor):
         tail = self.visit(ctx.postfixExprTail()) or []
         return [postfix_op] + tail
 
-    def visitPostfixOp(self, ctx):
+    def visitPostfixOp(self, ctx: HLangParser.PostfixOpContext):
         if ctx.LBRACK():
             return ("[]", self.visit(ctx.expr()))
         elif ctx.LPAREN():
             args = self.visit(ctx.argsOpt())
             return ("()", args)
     
-    def visitArgsOpt(self, ctx):
+    def visitArgsOpt(self, ctx: HLangParser.ArgsOptContext):
         if not ctx.getChildCount():
             return []
         return [self.visit(ctx.expr())] + self.visit(ctx.argTail())
 
-    def visitArgTail(self, ctx):
+    def visitArgTail(self, ctx: HLangParser.ArgTailContext):
         if not ctx.getChildCount():
             return []
         expr = self.visit(ctx.expr())
@@ -305,28 +318,28 @@ class ASTGeneration(HLangVisitor):
                 base = FunctionCall(base, val)
         return base
     
-    def visitPrimaryExpr(self, ctx):
+    def visitPrimaryExpr(self, ctx: HLangParser.PrimaryExprContext):
         if ctx.literal():
             return self.visit(ctx.literal())
         if ctx.ID():
             return Identifier(ctx.ID().getText())
         if ctx.expr():
-            return self.visit(ctx.expr())  # (expr)
+            return self.visit(ctx.expr())
         if ctx.LBRACK():
             return ArrayLiteral(self.visit(ctx.exprOpt()))
     
-    def visitExprOpt(self, ctx):
+    def visitExprOpt(self, ctx: HLangParser.ExprOptContext):
         if not ctx.getChildCount():
             return []
         return [self.visit(ctx.expr())] + self.visit(ctx.exprTail())
 
-    def visitExprTail(self, ctx):
+    def visitExprTail(self, ctx: HLangParser.ExprTailContext):
         if not ctx.getChildCount(): return []
         expr = self.visit(ctx.expr())
         tail = self.visit(ctx.exprTail()) or []
         return [expr] + tail
     
-    def visitLiteral(self, ctx):
+    def visitLiteral(self, ctx: HLangParser.LiteralContext):
         if ctx.INT_LIT():
             return IntegerLiteral(int(ctx.INT_LIT().getText()))
         if ctx.FLOAT_LIT():
@@ -340,6 +353,23 @@ class ASTGeneration(HLangVisitor):
         if ctx.arrayLiteral():
             return self.visit(ctx.arrayLiteral())
 
-    def visitArrayLiteral(self, ctx):
+    def visitArrayLiteral(self, ctx: HLangParser.ArrayLiteralContext):
         exprs = self.visit(ctx.exprOpt())
         return ArrayLiteral(exprs if exprs is not None else [])
+    
+    def visitLvalue(self, ctx: HLangParser.LvalueContext):
+        name = ctx.ID().getText()
+        indices = self.visit(ctx.indexTail())
+        if not indices:
+            return IdLValue(name)
+        result = Identifier(name)
+        for index in indices:
+            result = ArrayAccess(result, index)
+        return result
+    
+    def visitIndexTail(self, ctx: HLangParser.IndexTailContext):
+        if not ctx.getChildCount():
+            return []
+        index = self.visit(ctx.expr())
+        tail = self.visit(ctx.indexTail()) or []
+        return [index] + tail

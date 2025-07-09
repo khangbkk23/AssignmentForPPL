@@ -156,7 +156,7 @@ argsOpt: expr argTail | ;
 
 argTail: COMMA expr argTail | ;
 
-primaryExpr: literal | ID | LPAREN expr RPAREN | LBRACK expr RBRACK;
+primaryExpr: literal | ID | LPAREN expr RPAREN ;
 
 literal: INT_LIT | FLOAT_LIT | STRING_LIT | TRUE | FALSE | arrayLiteral;
 
