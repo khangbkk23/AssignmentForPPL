@@ -596,7 +596,7 @@ def test_065():
     source = """func main() -> void {
         let result = getValue();
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, FunctionCall(Identifier(getValue), []))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, FunctionCall(Identifier(getValue), []))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_066():
@@ -604,7 +604,7 @@ def test_066():
     source = """func main() -> void {
         let result = square(5);
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, FunctionCall(Identifier(square), [IntegerLiteral(5)]))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, FunctionCall(Identifier(square), [IntegerLiteral(5)]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_067():
@@ -612,7 +612,7 @@ def test_067():
     source = """func main() -> void {
         let result = add(10, 20);
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, FunctionCall(Identifier(add), [IntegerLiteral(10), IntegerLiteral(20)]))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, FunctionCall(Identifier(add), [IntegerLiteral(10), IntegerLiteral(20)]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_068():
@@ -620,7 +620,7 @@ def test_068():
     source = """func main() -> void {
         let result = add(square(3), multiply(2, 4));
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, FunctionCall(Identifier(add), [FunctionCall(Identifier(square), [IntegerLiteral(3)]), FunctionCall(Identifier(multiply), [IntegerLiteral(2), IntegerLiteral(4)])]))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, FunctionCall(Identifier(add), [FunctionCall(Identifier(square), [IntegerLiteral(3)]), FunctionCall(Identifier(multiply), [IntegerLiteral(2), IntegerLiteral(4)])]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_069():
@@ -628,7 +628,7 @@ def test_069():
     source = """func main() -> void {
         let result = process(arr[0]);
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, FunctionCall(Identifier(process), [ArrayAccess(Identifier(arr), IntegerLiteral(0))]))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, FunctionCall(Identifier(process), [ArrayAccess(Identifier(arr), IntegerLiteral(0))]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_070():
@@ -636,7 +636,7 @@ def test_070():
     source = """func main() -> void {
         let arr = [getValue(), getValue(), getValue()];
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(arr, None, ArrayLiteral([FunctionCall(Identifier(getValue), []), FunctionCall(Identifier(getValue), []), FunctionCall(Identifier(getValue), [])]))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(arr, ArrayLiteral([FunctionCall(Identifier(getValue), []), FunctionCall(Identifier(getValue), []), FunctionCall(Identifier(getValue), [])]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 # Tests 71-80: Pipeline Operations
@@ -645,5 +645,5 @@ def test_071():
     source = """func main() -> void {
         let result = data >> process;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(data), >>, Identifier(process)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(data), >>, Identifier(process)))])])"
     assert str(ASTGenerator(source).generate()) == expected
