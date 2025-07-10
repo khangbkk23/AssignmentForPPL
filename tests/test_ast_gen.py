@@ -187,15 +187,20 @@ def test_015():
 
 def test_016():
     """Test function with array parameter"""
-    source = "func sum(arr: int[5]) -> int { return 0; }"
-    expected = "Program(funcs=[FuncDecl(sum, [Param(arr, ArrayType(int, 5))], int, [ReturnStmt(IntegerLiteral(0))])])"
-    assert str(ASTGenerator(source).generate()) == expected
+    source = """func sum(arr: [int; 5]) -> int {
+        return 0;
+    }"""
+    expected = "Program(funcs=[FuncDecl(sum, [Param(arr, [int; 5])], int, [ReturnStmt(IntegerLiteral(0))])])"
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
 
 def test_017():
     """Test function with multiple array parameters"""
-    source = "func merge(a: int[3], b: float[2]) -> void {}"
-    expected = "Program(funcs=[FuncDecl(merge, [Param(a, ArrayType(int, 3)), Param(b, ArrayType(float, 2))], void, [])])"
-    assert str(ASTGenerator(source).generate()) == expected
+    source = """func merge(a: [int; 3], b: [float; 2]) -> void {
+    }"""
+    expected = "Program(funcs=[FuncDecl(merge, [Param(a, [int; 3]), Param(b, [float; 2])], void, [])])"
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
 
 def test_018():
     """Test multiple function declarations"""
@@ -218,7 +223,7 @@ def test_020():
     source = """func doSomething() -> void {
         return;
     }"""
-    expected = "Program(funcs=[FuncDecl(doSomething, [], void, [ReturnStmt(None)])])"
+    expected = "Program(funcs=[FuncDecl(doSomething, [], void, [ReturnStmt()])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 # Tests 21-30: Type System
@@ -244,7 +249,7 @@ def test_023():
             [[13, 14, 15, 16], [17, 18, 19, 20], [21, 22, 23, 24]]
         ];
     }"""
-    expected = "Program(funcs=[FuncDecl(test, [], void, [VarDecl(cube, [[[int; 4]; 3]; 2], ArrayLiteral([ArrayLiteral([ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3), IntegerLiteral(4)]), ArrayLiteral([IntegerLiteral(5), IntegerLiteral(6), IntegerLiteral(7), IntegerLiteral(8)]), ArrayLiteral([IntegerLiteral(9), IntegerLiteral(10), IntegerLiteral(11), IntegerLiteral(12)])]), ArrayLiteral([ArrayLiteral([IntegerLiteral(13), IntegerLiteral(14), IntegerLiteral(15), IntegerLiteral(16)]), ArrayLiteral([IntegerLiteral(17), IntegerLiteral(18), IntegerLiteral(19), IntegerLiteral(20)]), ArrayLiteral([IntegerLiteral(21), IntegerLiteral(22), IntegerLiteral(23), IntegerLiteral(24)])])]))])])])"
+    expected = "Program(funcs=[FuncDecl(test, [], void, [VarDecl(cube, [[[int; 4]; 3]; 2], ArrayLiteral([ArrayLiteral([ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3), IntegerLiteral(4)]), ArrayLiteral([IntegerLiteral(5), IntegerLiteral(6), IntegerLiteral(7), IntegerLiteral(8)]), ArrayLiteral([IntegerLiteral(9), IntegerLiteral(10), IntegerLiteral(11), IntegerLiteral(12)])]), ArrayLiteral([ArrayLiteral([IntegerLiteral(13), IntegerLiteral(14), IntegerLiteral(15), IntegerLiteral(16)]), ArrayLiteral([IntegerLiteral(17), IntegerLiteral(18), IntegerLiteral(19), IntegerLiteral(20)]), ArrayLiteral([IntegerLiteral(21), IntegerLiteral(22), IntegerLiteral(23), IntegerLiteral(24)])])]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_024():
@@ -264,36 +269,47 @@ def test_025():
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_026():
-    """Test large array size"""
-    source = "func test(arr: int[100]) -> void {}"
-    expected = "Program(funcs=[FuncDecl(test, [Param(arr, ArrayType(int, 100))], void, [])])"
+    """Test function with 2D array parameter and return"""
+    source = """func compute(data: [[float; 3]; 2]) -> int {
+        return 1;
+    }"""
+    expected = "Program(funcs=[FuncDecl(compute, [Param(data, [[float; 3]; 2])], int, [ReturnStmt(IntegerLiteral(1))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_027():
-    """Test array size 1"""
-    source = "func test(arr: int[1]) -> void {}"
-    expected = "Program(funcs=[FuncDecl(test, [Param(arr, ArrayType(int, 1))], void, [])])"
+    """Test function with single-element array param and inner var"""
+    source = """func init(flags: [bool; 1]) -> void {
+        let ready = true;
+    }"""
+    expected = "Program(funcs=[FuncDecl(init, [Param(flags, [bool; 1])], void, [VarDecl(ready, BooleanLiteral(True))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_028():
-    """Test multiple array types"""
-    source = "func test(a: int[5], b: float[3], c: bool[2]) -> void {}"
-    expected = "Program(funcs=[FuncDecl(test, [Param(a, ArrayType(int, 5)), Param(b, ArrayType(float, 3)), Param(c, ArrayType(bool, 2))], void, [])])"
-    assert str(ASTGenerator(source).generate()) == expected
+    """Test function with multiple array params and assignment"""
+    source = """func config(a: [int; 2], b: [float; 2]) -> void {
+        let x: int = 10;
+        x = x + 1;
+    }"""
+    expected = "Program(funcs=[FuncDecl(config, [Param(a, [int; 2]), Param(b, [float; 2])], void, [VarDecl(x, int, IntegerLiteral(10)), Assignment(IdLValue(x), BinaryOp(Identifier(x), +, IntegerLiteral(1)))])])"
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
 
 def test_029():
-    """Test void return type"""
-    source = "func test() -> void {}"
-    expected = "Program(funcs=[FuncDecl(test, [], void, [])])"
+    """Test function returning a string literal"""
+    source = """func greet() -> string {
+        return "Hello";
+    }"""
+    expected = "Program(funcs=[FuncDecl(greet, [], string, [ReturnStmt(StringLiteral('Hello'))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_030():
-    """Test optional type specification"""
+    """Test variable declaration without type and string concat"""
     source = """func main() -> void {
-        let x = 42;
+        let msg = "Hi, " + "there!";
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(x, None, IntegerLiteral(42))])])"
-    assert str(ASTGenerator(source).generate()) == expected
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(msg, BinaryOp(StringLiteral('Hi, '), +, StringLiteral('there!')))])])"
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
 
 # Tests 31-40: Statements
 def test_031():
@@ -323,28 +339,44 @@ def test_033():
 def test_034():
     """Test if statement"""
     source = """func main() -> void {
+        let x: int = 5;
         if (x > 0) {
             return x;
         }
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [IfStmt(BinaryOp(Identifier(x), >, IntegerLiteral(0)), BlockStmt([ReturnStmt(Identifier(x))]), [], None)])])"
-    assert str(ASTGenerator(source).generate()) == expected
-
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(x, int, IntegerLiteral(5)), "
+        "IfStmt(condition=BinaryOp(Identifier(x), >, IntegerLiteral(0)), "
+        "then_stmt=BlockStmt([ReturnStmt(Identifier(x))]))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+    
 def test_035():
     """Test if-else statement"""
     source = """func main() -> void {
+        let x: int = 1;
         if (x > 0) {
             return x;
         } else {
             return 0;
         }
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [IfStmt(BinaryOp(Identifier(x), >, IntegerLiteral(0)), BlockStmt([ReturnStmt(Identifier(x))]), [], BlockStmt([ReturnStmt(IntegerLiteral(0))]))])])"
-    assert str(ASTGenerator(source).generate()) == expected
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(x, int, IntegerLiteral(1)), "
+        "IfStmt(condition=BinaryOp(Identifier(x), >, IntegerLiteral(0)), "
+        "then_stmt=BlockStmt([ReturnStmt(Identifier(x))]), "
+        "else_stmt=BlockStmt([ReturnStmt(IntegerLiteral(0))]))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
 
 def test_036():
     """Test if-elseif-else statement"""
     source = """func main() -> void {
+        let x: int = -5;
         if (x > 0) {
             return 1;
         } else if (x < 0) {
@@ -353,8 +385,17 @@ def test_036():
             return 0;
         }
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [IfStmt(BinaryOp(Identifier(x), >, IntegerLiteral(0)), BlockStmt([ReturnStmt(IntegerLiteral(1))]), [(BinaryOp(Identifier(x), <, IntegerLiteral(0)), BlockStmt([ReturnStmt(IntegerLiteral(-1))]))], BlockStmt([ReturnStmt(IntegerLiteral(0))]))])])"
-    assert str(ASTGenerator(source).generate()) == expected
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(x, int, UnaryOp(-, IntegerLiteral(5))), "
+        "IfStmt(condition=BinaryOp(Identifier(x), >, IntegerLiteral(0)), "
+        "then_stmt=BlockStmt([ReturnStmt(IntegerLiteral(1))]), "
+        "elif_branches=[(BinaryOp(Identifier(x), <, IntegerLiteral(0)), "
+        "BlockStmt([ReturnStmt(UnaryOp(-, IntegerLiteral(1)))]))], "
+        "else_stmt=BlockStmt([ReturnStmt(IntegerLiteral(0))]))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
 
 def test_037():
     """Test while loop"""
@@ -383,7 +424,7 @@ def test_039():
             break;
         }
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [WhileStmt(BooleanLiteral(true), BlockStmt([BreakStmt()]))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [WhileStmt(BooleanLiteral(True), BlockStmt([BreakStmt()]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_040():
@@ -402,7 +443,7 @@ def test_041():
     source = """func main() -> void {
         let result = a + b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), +, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), +, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_042():
@@ -410,7 +451,7 @@ def test_042():
     source = """func main() -> void {
         let result = a - b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), -, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), -, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_043():
@@ -418,7 +459,7 @@ def test_043():
     source = """func main() -> void {
         let result = a * b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), *, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), *, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_044():
@@ -426,7 +467,7 @@ def test_044():
     source = """func main() -> void {
         let result = a / b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), /, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), /, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_045():
@@ -434,7 +475,7 @@ def test_045():
     source = """func main() -> void {
         let result = a % b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), %, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), %, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_046():
@@ -442,7 +483,7 @@ def test_046():
     source = """func main() -> void {
         let result = a == b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), ==, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), ==, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_047():
@@ -450,7 +491,7 @@ def test_047():
     source = """func main() -> void {
         let result = a != b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), !=, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), !=, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_048():
@@ -458,7 +499,7 @@ def test_048():
     source = """func main() -> void {
         let result = a < b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), <, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), <, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_049():
@@ -466,7 +507,7 @@ def test_049():
     source = """func main() -> void {
         let result = a > b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), >, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), >, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_050():
@@ -474,7 +515,7 @@ def test_050():
     source = """func main() -> void {
         let result = a <= b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), <=, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), <=, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 # Tests 51-60: Complex Expressions
@@ -483,7 +524,7 @@ def test_051():
     source = """func main() -> void {
         let result = a >= b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), >=, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), >=, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_052():
@@ -491,7 +532,7 @@ def test_052():
     source = """func main() -> void {
         let result = a && b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), &&, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), &&, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_053():
@@ -499,7 +540,7 @@ def test_053():
     source = """func main() -> void {
         let result = a || b;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(Identifier(a), ||, Identifier(b)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(a), ||, Identifier(b)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_054():
@@ -507,7 +548,7 @@ def test_054():
     source = """func main() -> void {
         let result = -x;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, UnaryOp(-, Identifier(x)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, UnaryOp(-, Identifier(x)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_055():
@@ -515,7 +556,7 @@ def test_055():
     source = """func main() -> void {
         let result = !flag;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, UnaryOp(!, Identifier(flag)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, UnaryOp(!, Identifier(flag)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_056():
@@ -523,7 +564,7 @@ def test_056():
     source = """func main() -> void {
         let result = a + b * c - d / e;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(BinaryOp(Identifier(a), +, BinaryOp(Identifier(b), *, Identifier(c))), -, BinaryOp(Identifier(d), /, Identifier(e))))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(BinaryOp(Identifier(a), +, BinaryOp(Identifier(b), *, Identifier(c))), -, BinaryOp(Identifier(d), /, Identifier(e))))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_057():
@@ -531,7 +572,7 @@ def test_057():
     source = """func main() -> void {
         let result = (a + b) * c;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(BinaryOp(Identifier(a), +, Identifier(b)), *, Identifier(c)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(BinaryOp(Identifier(a), +, Identifier(b)), *, Identifier(c)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_058():
@@ -539,7 +580,7 @@ def test_058():
     source = """func main() -> void {
         let result = ((a + b) * c) / d;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(BinaryOp(BinaryOp(Identifier(a), +, Identifier(b)), *, Identifier(c)), /, Identifier(d)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(BinaryOp(BinaryOp(Identifier(a), +, Identifier(b)), *, Identifier(c)), /, Identifier(d)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_059():
@@ -547,7 +588,7 @@ def test_059():
     source = """func main() -> void {
         let result = (a + b) > c && d < e;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, BinaryOp(BinaryOp(BinaryOp(Identifier(a), +, Identifier(b)), >, Identifier(c)), &&, BinaryOp(Identifier(d), <, Identifier(e))))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(BinaryOp(BinaryOp(Identifier(a), +, Identifier(b)), >, Identifier(c)), &&, BinaryOp(Identifier(d), <, Identifier(e))))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_060():
@@ -555,7 +596,7 @@ def test_060():
     source = """func main() -> void {
         let result = --x;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, None, UnaryOp(-, UnaryOp(-, Identifier(x))))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, UnaryOp(-, UnaryOp(-, Identifier(x))))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 # Tests 61-70: Arrays and Function Calls
@@ -564,7 +605,7 @@ def test_061():
     source = """func main() -> void {
         let arr = [1, 2, 3, 4, 5];
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(arr, None, ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3), IntegerLiteral(4), IntegerLiteral(5)]))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(arr, ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3), IntegerLiteral(4), IntegerLiteral(5)]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_062():
@@ -572,7 +613,7 @@ def test_062():
     source = """func main() -> void {
         let arr = [];
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(arr, None, ArrayLiteral([]))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(arr, ArrayLiteral([]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_063():
@@ -580,7 +621,7 @@ def test_063():
     source = """func main() -> void {
         let element = arr[0];
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(element, None, ArrayAccess(Identifier(arr), IntegerLiteral(0)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(element, ArrayAccess(Identifier(arr), IntegerLiteral(0)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_064():
@@ -588,7 +629,7 @@ def test_064():
     source = """func main() -> void {
         let element = matrix[1][2];
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(element, None, ArrayAccess(ArrayAccess(Identifier(matrix), IntegerLiteral(1)), IntegerLiteral(2)))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(element, ArrayAccess(ArrayAccess(Identifier(matrix), IntegerLiteral(1)), IntegerLiteral(2)))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_065():
@@ -647,3 +688,350 @@ def test_071():
     }"""
     expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(result, BinaryOp(Identifier(data), >>, Identifier(process)))])])"
     assert str(ASTGenerator(source).generate()) == expected
+
+def test_071():
+    """Test nested function calls"""
+    source = """func main() -> void {
+        print(add(1, multiply(2, 3)));
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "ExprStmt(FunctionCall(Identifier(print), [FunctionCall(Identifier(add), [IntegerLiteral(1), FunctionCall(Identifier(multiply), [IntegerLiteral(2), IntegerLiteral(3)])])]))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_072():
+    """Test function call with no arguments"""
+    source = """func main() -> void {
+        getValue();
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "ExprStmt(FunctionCall(Identifier(getValue), []))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_073():
+    """Test function call with mixed argument types"""
+    source = """func main() -> void {
+        process(42, "hello", true, 3.14);
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "ExprStmt(FunctionCall(Identifier(process), [IntegerLiteral(42), StringLiteral('hello'), BooleanLiteral(True), FloatLiteral(3.14)]))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_074():
+    """Test chained function calls using pipeline"""
+    source = """func main() -> void {
+        getObject() >> getProperty() >> getValue();
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "ExprStmt(BinaryOp(BinaryOp(FunctionCall(Identifier(getObject), []), >>, FunctionCall(Identifier(getProperty), [])), >>, FunctionCall(Identifier(getValue), [])))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_075():
+    """Test function call in expression context"""
+    source = """func main() -> void {
+        let result: int = calculate(10) + getValue();
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, BinaryOp(FunctionCall(Identifier(calculate), [IntegerLiteral(10)]), +, FunctionCall(Identifier(getValue), [])))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_076():
+    """Test 2D array access"""
+    source = """func main() -> void {
+        let value: int = matrix[2][3];
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(value, int, ArrayAccess(ArrayAccess(Identifier(matrix), IntegerLiteral(2)), IntegerLiteral(3)))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_077():
+    """Test 3D array access"""
+    source = """func main() -> void {
+        let value: int = cube[1][2][3];
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(value, int, ArrayAccess(ArrayAccess(ArrayAccess(Identifier(cube), IntegerLiteral(1)), IntegerLiteral(2)), IntegerLiteral(3)))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_078():
+    """Test array access with expression index"""
+    source = """func main() -> void {
+        let value: int = arr[i + 1];
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(value, int, ArrayAccess(Identifier(arr), BinaryOp(Identifier(i), +, IntegerLiteral(1))))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_079():
+    """Test array access with function call index"""
+    source = """func main() -> void {
+        let value: int = arr[getIndex()];
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(value, int, ArrayAccess(Identifier(arr), FunctionCall(Identifier(getIndex), [])))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_080():
+    """Test array access assignment"""
+    source = """func main() -> void {
+        arr[0] = 42;
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "Assignment(ArrayAccess(Identifier(arr), IntegerLiteral(0)), IntegerLiteral(42))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_081():
+    """Test unary minus with nested expression"""
+    source = """func main() -> void {
+        let result: int = -(x + y);
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, UnaryOp(-, BinaryOp(Identifier(x), +, Identifier(y))))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_082():
+    """Test unary not with comparison"""
+    source = """func main() -> void {
+        let result: bool = !(x > y);
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, bool, UnaryOp(!, BinaryOp(Identifier(x), >, Identifier(y))))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_083():
+    """Test multiple unary operators"""
+    source = """func main() -> void {
+        let result: int = --x;
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, UnaryOp(-, UnaryOp(-, Identifier(x))))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_084():
+    """Test unary not with logical expression"""
+    source = """func main() -> void {
+        let result: bool = !(x && y);
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, bool, UnaryOp(!, BinaryOp(Identifier(x), &&, Identifier(y))))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_085():
+    """Test unary operators with function calls"""
+    source = """func main() -> void {
+        let result: int = -getValue();
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, UnaryOp(-, FunctionCall(Identifier(getValue), [])))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_086():
+    """Test complex parenthesized expressions"""
+    source = """func main() -> void {
+        let result: int = (x + y) * (z - w);
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, BinaryOp(BinaryOp(Identifier(x), +, Identifier(y)), *, BinaryOp(Identifier(z), -, Identifier(w))))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_087():
+    """Test nested parentheses"""
+    source = """func main() -> void {
+        let result: int = ((x + y) * z);
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, BinaryOp(BinaryOp(Identifier(x), +, Identifier(y)), *, Identifier(z)))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_088():
+    """Test parentheses with function calls"""
+    source = """func main() -> void {
+        let result: int = (getValue() + 10) * 2;
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, BinaryOp(BinaryOp(FunctionCall(Identifier(getValue), []), +, IntegerLiteral(10)), *, IntegerLiteral(2)))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_089():
+    """Test parentheses with unary operators"""
+    source = """func main() -> void {
+        let result: int = -(x + y) * 2;
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, BinaryOp(UnaryOp(-, BinaryOp(Identifier(x), +, Identifier(y))), *, IntegerLiteral(2)))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_090():
+    """Test parentheses with array access"""
+    source = """func main() -> void {
+        let result: int = (arr[0] + arr[1]) * 2;
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, BinaryOp(BinaryOp(ArrayAccess(Identifier(arr), IntegerLiteral(0)), +, ArrayAccess(Identifier(arr), IntegerLiteral(1))), *, IntegerLiteral(2)))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_091():
+    """Test single pipeline expression"""
+    source = """func main() -> void {
+        let result: int = x >> y;
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, BinaryOp(Identifier(x), >>, Identifier(y)))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_092():
+    """Test chained pipeline with three operands"""
+    source = """func main() -> void {
+        let output: int = a >> b >> c;
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(output, int, BinaryOp(BinaryOp(Identifier(a), >>, Identifier(b)), >>, Identifier(c)))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_093():
+    """Test pipeline with function call and arithmetic"""
+    source = """func main() -> void {
+        let result: int = (x + 1) >> compute();
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(result, int, BinaryOp(BinaryOp(Identifier(x), +, IntegerLiteral(1)), >>, FunctionCall(Identifier(compute), [])))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_094():
+    """Test nested pipeline inside pipeline"""
+    source = """func main() -> void {
+        let value: int = (a >> b) >> (c >> d);
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(value, int, BinaryOp(BinaryOp(Identifier(a), >>, Identifier(b)), >>, BinaryOp(Identifier(c), >>, Identifier(d))))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_095():
+    """Test pipeline with function call having arguments"""
+    source = """func main() -> void {
+        let res: int = val >> process(10, 20);
+    }"""
+    expected = (
+        "Program(funcs=[FuncDecl(main, [], void, ["
+        "VarDecl(res, int, BinaryOp(Identifier(val), >>, FunctionCall(Identifier(process), [IntegerLiteral(10), IntegerLiteral(20)])))])])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+# Tests 96-100: Complex testcases
+
+def test_096():
+    """Test const declaration with complex expression"""
+    source = """const MAX_SIZE: int = 10 * 20 + 5;"""
+    expected = (
+        "Program(consts=[ConstDecl(MAX_SIZE, int, BinaryOp(BinaryOp(IntegerLiteral(10), *, IntegerLiteral(20)), +, IntegerLiteral(5)))])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_097():
+    """Test const declaration with boolean expression"""
+    source = """const IS_VALID: bool = true && false;"""
+    expected = (
+        "Program(consts=[ConstDecl(IS_VALID, bool, BinaryOp(BooleanLiteral(True), &&, BooleanLiteral(False)))])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_098():
+    """Test const declaration with string concatenation"""
+    source = """const MESSAGE: string = "Hello " + "World";"""
+    expected = (
+        "Program(consts=[ConstDecl(MESSAGE, string, BinaryOp(StringLiteral('Hello '), +, StringLiteral('World')))])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_099():
+    """Test const declaration with float computation"""
+    source = """const PI_APPROX: float = 3.14159 * 2.0;"""
+    expected = (
+        "Program(consts=[ConstDecl(PI_APPROX, float, BinaryOp(FloatLiteral(3.14159), *, FloatLiteral(2.0)))])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected
+
+def test_100():
+    """Test const declaration with unary expression"""
+    source = """const NEGATIVE_VALUE: int = -42;"""
+    expected = (
+        "Program(consts=[ConstDecl(NEGATIVE_VALUE, int, UnaryOp(-, IntegerLiteral(42)))])"
+    )
+    ast = ASTGenerator(source).generate()
+    assert str(ast) == expected

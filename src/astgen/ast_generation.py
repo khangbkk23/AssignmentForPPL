@@ -141,7 +141,9 @@ class ASTGeneration(HLangVisitor):
         return [(cond, block)] + tail
 
     def visitElseOpt(self, ctx: HLangParser.ElseOptContext):
-        return self.visit(ctx.blockStmt())
+        if ctx.blockStmt():
+            return self.visit(ctx.blockStmt())
+        return None
     
     def visitWhileStmt(self, ctx: HLangParser.WhileStmtContext):
         cond = self.visit(ctx.expr())
