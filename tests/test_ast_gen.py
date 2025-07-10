@@ -142,7 +142,7 @@ def test_009():
     source = """func main() -> void {
         let name = "Alice";
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(name, None, StringLiteral('Alice'))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(name, StringLiteral('Alice'))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_010():
@@ -182,7 +182,7 @@ def test_014():
 def test_015():
     """Test function returning different types"""
     source = """func getName() -> string { return "John"; }"""
-    expected = "Program(funcs=[FuncDecl(getName, [], string, [ReturnStmt(StringLiteral('John')])])"
+    expected = "Program(funcs=[FuncDecl(getName, [], string, [ReturnStmt(StringLiteral('John'))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_016():
@@ -233,7 +233,7 @@ def test_022():
     source = """func test() -> void {
         let matrix: [[int; 3]; 2] = [[1, 2, 3], [4, 5, 6]];
     }"""
-    expected = "Program(funcs=[FuncDecl(test, [], void, [VarDecl(matrix, ArrayType(ArrayType(int, 3), 2), ArrayLiteral([ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3)]), ArrayLiteral([IntegerLiteral(4), IntegerLiteral(5), IntegerLiteral(6)])]))])])"
+    expected = "Program(funcs=[FuncDecl(test, [], void, [VarDecl(matrix, [[int; 3]; 2], ArrayLiteral([ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3)]), ArrayLiteral([IntegerLiteral(4), IntegerLiteral(5), IntegerLiteral(6)])]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_023():
@@ -244,7 +244,7 @@ def test_023():
             [[13, 14, 15, 16], [17, 18, 19, 20], [21, 22, 23, 24]]
         ];
     }"""
-    expected = "Program(funcs=[FuncDecl(test, [], void, [VarDecl(cube, ArrayType(ArrayType(ArrayType(int, 4), 3), 2), ArrayLiteral([ArrayLiteral([ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3), IntegerLiteral(4)]), ArrayLiteral([IntegerLiteral(5), IntegerLiteral(6), IntegerLiteral(7), IntegerLiteral(8)]), ArrayLiteral([IntegerLiteral(9), IntegerLiteral(10), IntegerLiteral(11), IntegerLiteral(12)])]), ArrayLiteral([ArrayLiteral([IntegerLiteral(13), IntegerLiteral(14), IntegerLiteral(15), IntegerLiteral(16)]), ArrayLiteral([IntegerLiteral(17), IntegerLiteral(18), IntegerLiteral(19), IntegerLiteral(20)]), ArrayLiteral([IntegerLiteral(21), IntegerLiteral(22), IntegerLiteral(23), IntegerLiteral(24)])])]))])])])"
+    expected = "Program(funcs=[FuncDecl(test, [], void, [VarDecl(cube, [[[int; 4]; 3]; 2], ArrayLiteral([ArrayLiteral([ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3), IntegerLiteral(4)]), ArrayLiteral([IntegerLiteral(5), IntegerLiteral(6), IntegerLiteral(7), IntegerLiteral(8)]), ArrayLiteral([IntegerLiteral(9), IntegerLiteral(10), IntegerLiteral(11), IntegerLiteral(12)])]), ArrayLiteral([ArrayLiteral([IntegerLiteral(13), IntegerLiteral(14), IntegerLiteral(15), IntegerLiteral(16)]), ArrayLiteral([IntegerLiteral(17), IntegerLiteral(18), IntegerLiteral(19), IntegerLiteral(20)]), ArrayLiteral([IntegerLiteral(21), IntegerLiteral(22), IntegerLiteral(23), IntegerLiteral(24)])])]))])])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_024():
@@ -252,7 +252,7 @@ def test_024():
     source = """func test() -> void {
         let jagged: [[int; 2]; 3] = [[1, 2], [3, 4], [5, 6]];
     }"""
-    expected = "Program(funcs=[FuncDecl(test, [], void, [VarDecl(jagged, ArrayType(ArrayType(int, 2), 3), ArrayLiteral([ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2)]), ArrayLiteral([IntegerLiteral(3), IntegerLiteral(4)]), ArrayLiteral([IntegerLiteral(5), IntegerLiteral(6)])]))])])"
+    expected = "Program(funcs=[FuncDecl(test, [], void, [VarDecl(jagged, [[int; 2]; 3], ArrayLiteral([ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2)]), ArrayLiteral([IntegerLiteral(3), IntegerLiteral(4)]), ArrayLiteral([IntegerLiteral(5), IntegerLiteral(6)])]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_025():
@@ -260,7 +260,7 @@ def test_025():
     source = """func test() -> void {
         let mixed: [[float; 2]; 2] = [[1.5, 2.5], [3.5, 4.5]];
     }"""
-    expected = "Program(funcs=[FuncDecl(test, [], void, [VarDecl(mixed, ArrayType(ArrayType(float, 2), 2), ArrayLiteral([ArrayLiteral([FloatLiteral(1.5), FloatLiteral(2.5)]), ArrayLiteral([FloatLiteral(3.5), FloatLiteral(4.5)])]))])])"
+    expected = "Program(funcs=[FuncDecl(test, [], void, [VarDecl(mixed, [[float; 2]; 2], ArrayLiteral([ArrayLiteral([FloatLiteral(1.5), FloatLiteral(2.5)]), ArrayLiteral([FloatLiteral(3.5), FloatLiteral(4.5)])]))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_026():
