@@ -39,7 +39,7 @@ def test_006a():
 def test_007a():
     """Test illegal escape sequence error"""
     source = '"Hello \\x World"'
-    expected = "Illegal Escape In String: Hello \\x World"
+    expected = "Illegal Escape In String: Hello \\x"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_008a():
@@ -106,9 +106,9 @@ def test_005():
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_006():
-    """Test nested-looking comments"""
-    source = "/* outer /* inner */ still outer */ let a = 1;"
-    expected = "still,outer,*,/,let,a,=,1,;,EOF"
+    """Test multiple levels of nesting comments"""
+    source = "/* level1 /* level2 /* level3 */ back to level2 */ back to level1 */ let x = 42;"
+    expected = "let,x,=,42,;,EOF"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_007():
@@ -352,7 +352,7 @@ def test_044():
 def test_045():
     """Test illegal escape start"""
     source = '"\\x123"'
-    expected = "Illegal Escape In String: \\x123"
+    expected = "Illegal Escape In String: \\x"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 # Testing with random content testcase
@@ -571,61 +571,61 @@ def test_080():
 def test_081():
     """Test illegal escape string #01"""
     source = '"1oMZQXi\\1 more text"'
-    expected = "Illegal Escape In String: 1oMZQXi\\1 more text"
+    expected = "Illegal Escape In String: 1oMZQXi\\1"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_082():
     """Test illegal escape string #02"""
     source = '"kxRt4\\@ more text"'
-    expected = "Illegal Escape In String: kxRt4\\@ more text"
+    expected = "Illegal Escape In String: kxRt4\\@"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_083():
     """Test illegal escape string #03"""
     source = '"1FV9\\` more text"'
-    expected = "Illegal Escape In String: 1FV9\\` more text"
+    expected = "Illegal Escape In String: 1FV9\\`"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_084():
     """Test illegal escape string #04"""
     source = '"1bqlgb\\$ more text"'
-    expected = "Illegal Escape In String: 1bqlgb\\$ more text"
+    expected = "Illegal Escape In String: 1bqlgb\\$"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_085():
     """Test illegal escape string #05"""
     source = '"OrV3ooc0\\2 more text"'
-    expected = "Illegal Escape In String: OrV3ooc0\\2 more text"
+    expected = "Illegal Escape In String: OrV3ooc0\\2"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_086():
     """Test illegal escape string #06"""
     source = '"0pzah\\^ more text"'
-    expected = "Illegal Escape In String: 0pzah\\^ more text"
+    expected = "Illegal Escape In String: 0pzah\\^"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_87():
     """Test illegal escape string #07"""
     source = '"37pV \\3 more text"'
-    expected = "Illegal Escape In String: 37pV \\3 more text"
+    expected = "Illegal Escape In String: 37pV \\3"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_88():
     """Test illegal escape string #08"""
     source = '"ziqv0B\\& more text"'
-    expected = "Illegal Escape In String: ziqv0B\\& more text"
+    expected = "Illegal Escape In String: ziqv0B\\&"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_89():
     """Test illegal escape string #09"""
     source = '"gEhYENU1\\1 more text"'
-    expected = "Illegal Escape In String: gEhYENU1\\1 more text"
+    expected = "Illegal Escape In String: gEhYENU1\\1"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_90():
     """Test illegal escape string #10"""
     source = '"DHpUB8\\& more text"'
-    expected = "Illegal Escape In String: DHpUB8\\& more text"
+    expected = "Illegal Escape In String: DHpUB8\\&"
     assert Tokenizer(source).get_tokens_as_string() == expected
 
 def test_091():

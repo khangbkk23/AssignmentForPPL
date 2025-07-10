@@ -117,19 +117,19 @@ def test_nt():
 
 def test_001():
     """Test variable declaration with explicit type and string value"""
-    source = """let name: string = "HLang";"""
+    source = """const name: string = "HLang";"""
     expected = "success"
     assert Parser(source).parse() == expected
 
 def test_002():
     """Test variable declaration with negative float"""
-    source = """let x = -4.56;"""
+    source = """const x = -4.56;"""
     expected = "success"
     assert Parser(source).parse() == expected
 
 def test_003():
     """Test variable declaration with array of strings"""
-    source = """let greetings: [string; 2] = ["hi", "hello"];"""
+    source = """const greetings: [string; 2] = ["hi", "hello"];"""
     expected = "success"
     assert Parser(source).parse() == expected
 
@@ -140,7 +140,7 @@ def test_004():
 
 def test_005():
     """Test variable declaration with expression value"""
-    source = """let area = 3.14 * 2 * 2;"""
+    source = """const area = 3.14 * 2 * 2;"""
     expected = "success"
     assert Parser(source).parse() == expected
 

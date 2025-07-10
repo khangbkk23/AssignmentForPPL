@@ -282,7 +282,7 @@ ILLEGAL_ESCAPE
 /* Comments & Whitespace */
 LINE_COMMENT    : '//' ~[\r\n]* -> skip ;
 
-BLOCK_COMMENT   : '/*' .*? '*/' -> skip ;
+BLOCK_COMMENT : '/*' (BLOCK_COMMENT | ~[*] | '*' ~[/])* '*/' -> skip ;
 
 WS  : [ \t\r\n]+ -> skip ;
 
