@@ -3,6 +3,7 @@ Static Semantic Checker for HLang Programming Language
 """
 
 from functools import reduce
+from platform import node
 from typing import Dict, List, Set, Optional, Any, Tuple, Union, NamedTuple
 from ..utils.visitor import ASTVisitor
 from ..utils.nodes import (
@@ -90,13 +91,13 @@ class StaticChecker(ASTVisitor):
             return lhs.size == rhs.size and self.compare_types(lhs.element_type, rhs.element_type)
         return type(lhs) == type(rhs)
 
-    def visit(self, node: 'ASTNode', param):
+    def visit(self, node: ASTNode, param):
         return node.accept(self, param)
 
-    def check_program(self, node: 'ASTNode'):
+    def check_program(self, node: ASTNode):
         self.visit(node, [])
         
-    def visit_program(self, node: 'Program', param: List):
+    def visit_program(self, node: Program, param: List):
         for func in node.func_decls:
             if func.name == "main" and type(func.return_type) != VoidType and len(func.params) == 0:
                 break
@@ -115,7 +116,7 @@ class StaticChecker(ASTVisitor):
             ]]
         )
 
-    def visit_const_decl(self, node: 'ConstDecl', param: List[List['Symbol']]) -> Symbol:
+    def visit_const_decl(self, node: ConstDecl, param: List[List['Symbol']]) -> Symbol:
         if self.lookup(node.name, param[0], lambda x: x.name):
             raise Redeclared('Constant', node.name)
         
@@ -132,7 +133,7 @@ class StaticChecker(ASTVisitor):
         
         return Symbol(node.name, final_type, is_constant=True)
         
-    def visit_func_decl(self, node: 'FuncDecl', param: List[List['Symbol']]) -> Symbol:
+    def visit_func_decl(self, node: FuncDecl, param: List[List['Symbol']]) -> Symbol:
         if self.lookup(node.name, param[0], lambda x: x.name):
             raise Redeclared('Function', node.name)
         
@@ -154,7 +155,7 @@ class StaticChecker(ASTVisitor):
             
         return func_symbol
     
-    def visit_param(self, node: 'Param', param: List[List['Symbol']]) -> Symbol:
+    def visit_param(self, node: Param, param: List[List['Symbol']]) -> Symbol:
         if self.lookup(node.name, param[0], lambda x: x.name):
             raise Redeclared('Parameter', node.name)
         
@@ -165,7 +166,7 @@ class StaticChecker(ASTVisitor):
         # param[0].insert(0, param_symbol)
         return param_symbol
 
-    def visit_var_decl(self, node: 'VarDecl', param: List[List['Symbol']]) -> Symbol:
+    def visit_var_decl(self, node: VarDecl, param: List[List['Symbol']]) -> Symbol:
         if self.lookup(node.name, param[0], lambda x: x.name):
             raise Redeclared('Variable', node.name)
         
@@ -179,7 +180,7 @@ class StaticChecker(ASTVisitor):
         param[0].insert(0, var_symbol)
         return var_symbol
     
-    def visit_assignment(self, node: 'Assignment', param: List[List['Symbol']]) -> None:
+    def visit_assignment(self, node: Assignment, param: List[List['Symbol']]) -> None:
         def check_declared_const(lvalue, param):
             current = lvalue
             while isinstance(current, (IdLValue, Identifier)):
@@ -213,42 +214,69 @@ class StaticChecker(ASTVisitor):
             if self.compare_types(value_typ, self.curr_function.return_type):
                 raise TypeMismatchInStatement(node)
     
-    def visit_block_stmt(self, node: 'BlockStmt', param: List[List['Symbol']]) -> None:
+    def visit_block_stmt(self, node: BlockStmt, param: List[List['Symbol']]) -> None:
+        scope = []
+        params = [scope] + param
+        error = None
+        for stmt in node.statements:
+            try:
+                res = self.visit(stmt, params)
+                if isinstance(res, Symbol):
+                    scope.append(res)
+            except StaticError as e:
+                error =  e
+        if error:
+            raise error
+        
+    def visit_if_stmt(self, node: IfStmt, param: List[List['Symbol']]) -> None:
         pass
     
-    def visit_if_stmt(self, node: 'IfStmt', param: List[List['Symbol']]) -> None:
+    def visit_for_stmt(self, node: ForStmt, param: List[List['Symbol']]) -> None:
         pass
     
-    def visit_for_stmt(self, node: 'ForStmt', param: List[List['Symbol']]) -> None:
+    def visit_while_stmt(self, node: WhileStmt, param: List[List['Symbol']]) -> None:
+        condition = self.visit(node.condition, param)
+        if not self.compare_types(condition, BoolType()):
+            raise TypeMismatchInStatement(node)
+        
+        self.number_of_loop += 1
+        self.visit(node.body, param)
+        self.number_of_loop -= 1
+    
+    def visit_break_stmt(self, node: BreakStmt param: List[List['Symbol']]) -> None:
+        if self.number_of_loop == 0:
+            raise MustInLoop(node)
+    
+    def visit_continue_stmt(self, node: ContinueStmt, param: List[List['Symbol']]) -> None:
+        if self.number_of_loop == 0:
+            raise MustInLoop(node)
+    
+    def visit_expr_stmt(self, node: ExprStmt, param: List[List['Symbol']]) -> None:
         pass
     
-    def visit_while_stmt(self, node: 'WhileStmt', param: List[List['Symbol']]) -> None:
+    def visit_identifier(self, node: Identifier, param: List[List['Symbol']]) -> Type:
+        for scope in param:
+            symbol = self.lookup(node.name, scope, lambda sym: sym.name)
+            if symbol:
+                return symbol.typ
+        raise Undeclared(IdentifierMarker(), node.name)
+    
+    def visit_id_lvalue(self, node: IdLValue, param: List[List['Symbol']]) -> Type:
+        for scope in param:
+            symbol = self.lookup(node.name, scope, lambda sym: sym.name)
+            if symbol:
+                return symbol.typ
+        raise Undeclared(IdentifierMarker(), node.name)
+
+    def visit_array_access(self, node: ArrayAccess, param):
         pass
     
-    def visit_break_stmt(self, node: 'BreakStmt', param: List[List['Symbol']]) -> None:
+    def visit_array_access_lvalue(self, node: ArrayAccessLValue, param):
         pass
     
-    def visit_continue_stmt(self, node: 'ContinueStmt', param: List[List['Symbol']]) -> None:
-        pass
-    
-    def visit_expr_stmt(self, node: 'ExprStmt', param: List[List['Symbol']]) -> None:
-        pass
-    
-    def visit_identifier(self, node: 'Identifier', param: List[List['Symbol']]) -> Type:
-        pass
-    
-    def visit_id_lvalue(self, node: 'IdLValue', param: List[List['Symbol']]) -> Type:
-        pass
-    
-    def visit_array_access(self, node, param):
-        pass
-    
-    def visit_array_access_lvalue(self, node, param):
-        pass
-    
-    def visit_array_literal(self, node: 'ArrayLiteral', param: List[List['Symbol']]) -> Type:
+    def visit_array_literal(self, node: ArrayLiteral, param: List[List['Symbol']]) -> Type:
         if not node.elements:
-            raise TypeMismatchInStatement(node)  # hoặc bạn có thể giả định kiểu cụ thể hơn
+            raise TypeMismatchInStatement(node) 
 
         element_types = [self.visit(ele, param) for ele in node.elements]
         first_type = element_types[0]
@@ -258,47 +286,88 @@ class StaticChecker(ASTVisitor):
                 raise TypeMismatchInStatement(node)
 
         return ArrayType(first_type, len(element_types))
-    
-    def visit_array_type(self, node, param):
-        pass
-    
-    def visit_binary_op(self, node, param):
-        pass
-    
-    def visit_unary_op(self, node, param):
-        pass
-    
-     def visit_function_call(self, node: 'FunctionCall', param: List[List['Symbol']]) -> Type:
+
+    def visit_array_type(self, node: ArrayType, param: List[List['Symbol']]) -> Type:
+        return ArrayType(self.visit(node.element_type, param), node.size)
+
+    def visit_binary_op(self, node: BinaryOp, param: List[List['Symbol']]) -> Type:
+        left = self.visit(node.left, param)
+        right = self.visit(node.right, param)
+        
+        if not self.compare_types(left, right):
+            raise TypeMismatchInExpression(node)
+        
+        if node.operator in ('+', '-', '*', '/'):
+            if isinstance(left, (IntType, FloatType)):
+                return left
+            raise TypeMismatchInExpression(node)
+        
+        elif node.operator in ('==', '!=', '<', '>', '<=', '>='):
+            if isinstance(left, (IntType, FloatType, BoolType, StringType)):
+                return BoolType()
+            raise TypeMismatchInExpression(node)
+        
+        if node.operator in ['&&', '||']:
+            if not isinstance(left, BoolType):
+                raise TypeMismatchInExpression(node)
+            return BoolType()
+
+        raise TypeMismatchInExpression(node)
+
+    def visit_unary_op(self, node: UnaryOp, param: List[List['Symbol']]) -> Type:
+        operand = self.visit(node.operand, param)
+        if node.operator == '-':
+            if not isinstance(operand, (IntType, FloatType)):
+                raise TypeMismatchInExpression(node)
+            return operand
+        elif node.operator == '!':
+            if not isinstance(operand, BoolType):
+                raise TypeMismatchInExpression(node)
+            return BoolType()
+        raise TypeMismatchInExpression(node)
+
+    def visit_function_call(self, node: FunctionCall, param: List[List['Symbol']]) -> Type:
          # Check self-call
         if self.curr_function and node.function.name == self.curr_function.name:
             raise Undeclared(FunctionMarker(), node.function.name)
+
+    def visit_return_stmt(self, node: ReturnStmt, param: List[List['Symbol']]) -> Type:
+        if not self.curr_function:
+            raise StaticError(node)
         
-    def visit_return_stmt(self, node, param):
-        pass
+        return_type = self.curr_function.return_type
+        if node.value is None:
+            if not isinstance(return_type, VoidType):
+                raise TypeMismatchInStatement(node)
+            return
+        
+        value_type = self.visit(node.value, param)
+        if not self.compare_types(value_type, return_type):
+            raise TypeMismatchInStatement(node)
      # Literals
-    def visit_integer_literal(self, node, param):
+    def visit_integer_literal(self, node: IntegerLiteral, param):
         return IntType()
     
-    def visit_float_literal(self, node, param):
+    def visit_float_literal(self, node: FloatLiteral, param):
         return FloatType()
     
-    def visit_float_type(self, node, param):
+    def visit_float_type(self, node: FloatType, param):
         return FloatType()
     
-    def visit_int_type(self, node, param):
+    def visit_int_type(self, node: IntType, param):
         return IntType()
     
-    def visit_string_type(self, node, param):
+    def visit_string_type(self, node: StringType, param):
         return StringType()
     
-    def visit_bool_type(self, node, param):
+    def visit_bool_type(self, node: BoolType, param):
         return BoolType()
     
-    def visit_void_type(self, node, param):
+    def visit_void_type(self, node: VoidType, param):
         return VoidType()
     
-    def visit_boolean_literal(self, node, param):
+    def visit_boolean_literal(self, node: BooleanLiteral, param):
         return BoolType()
     
-    def visit_string_literal(self, node, param):
+    def visit_string_literal(self, node: StringLiteral, param):
         return StringType()
