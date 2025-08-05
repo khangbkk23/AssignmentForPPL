@@ -30,46 +30,46 @@ options{
  *------------------------------------------------------------------*/
 
 // Entry point
-program: decllist EOF ;
+program: decllist* EOF ;
 
-decllist: decl decllistTail | ;
-
-decllistTail: decl decllistTail | ;
+decllist: constdecl | funcdecl ;
 
 decl: vardecl | constdecl | funcdecl;
 
 // Variable and constant declarations
-vardecl: LET ID typeOpt ASSIGN expr SEMI;
+constdecl: CONST ID (COLON varType)? ASSIGN expr SEMI ;
 
-constdecl: CONST ID typeOpt ASSIGN expr SEMI;
+vardecl: LET ID (COLON varType)? ASSIGN expr SEMI;
 
-typeOpt: COLON typeSpec | ;
+funcdecl: FUNC ID paramdecl ARROW returnType body ;
 
-typeSpec: dataType | arrayType;
 
-dataType: INT | FLOAT | BOOL | STRING | VOID;
+varType: nvoidType;
 
-arrayType: LBRACK typeSpec SEMI INT_LIT RBRACK;
+returnType: nvoidType | VOID;
 
-// Function declaration
-funcdecl: FUNC ID LPAREN paramOpt RPAREN ARROW typeSpec blockStmt ;
+nvoidType: INT | FLOAT | BOOL | STRING | arrayType ;
 
-paramOpt: param paramTail | ;
+arrayType: LBRACK nvoidType SEMI INT_LIT RBRACK ;
 
-paramTail: COMMA param paramTail | ;
+// ID 
+idlist: ID idlistTail ;
+idlistTail: COMMA ID idlistTail | ;
 
-param: ID COLON typeSpec;
+// Parameters
+paramdecl: LPAREN paramList RPAREN ;
+paramList: param paramListTail | ;
+paramListTail: COMMA param paramListTail | ;
+param: ID COLON varType ;
 
-// Statements
-stmtList: stmt stmtListTail | ;
-
-stmtListTail: stmt stmtListTail | ;
-
+// Body of function
+body: LBRACE stmt* RBRACE;
 
 stmt
     : vardecl
     | constdecl
     | assignStmt
+    | callStmt
     | ifStmt
     | whileStmt
     | forStmt
@@ -79,96 +79,62 @@ stmt
     | exprStmt
     | blockStmt;
 
-assignStmt: lvalue ASSIGN expr SEMI;
+ifStmt: IF LPAREN expr RPAREN body (ELSE elseStmt)? ;
+elseStmt: ifStmt | body ;
 
-ifStmt: IF LPAREN expr RPAREN blockStmt elseifTail elseOpt;
+whileStmt: WHILE LPAREN expr RPAREN body ;
+forStmt: FOR LPAREN ID IN expr RPAREN body ;
+breakStmt: BREAK SEMI ;
+continueStmt: CONTINUE SEMI ;
 
-elseifTail: ELSE IF LPAREN expr RPAREN blockStmt elseifTail | ;
-
-elseOpt: ELSE blockStmt | ;
-
-whileStmt: WHILE LPAREN expr RPAREN blockStmt;
-
-forStmt: FOR LPAREN ID IN expr RPAREN blockStmt;
-
-breakStmt: BREAK SEMI;
-
-continueStmt: CONTINUE SEMI;
-
+callStmt: callExpr SEMI ;
 returnStmt: RETURN exprReturn SEMI;
-
 exprReturn: expr | ;
-
 exprStmt: expr SEMI;
 
-blockStmt: LBRACE stmtList RBRACE;
+assignStmt: lvalue ASSIGN expr SEMI;
+lvalue: ID lvalueTail ;
+lvalueTail: LBRACK expr RBRACK lvalueTail | ;
+
+blockStmt: LBRACE stmt* RBRACE ;
 
 
 // Expressions
-expr: pipelineExpr;
+expr: expr1 ;
+expr1: expr2 ;
+expr2: expr2 PIPE expr3 | expr3 ;
+expr3: expr3 OR expr4 | expr4 ;
+expr4: expr4 AND expr5 | expr5 ;
+expr5: expr5 (EQ | NEQ) expr6 | expr6 ;
+expr6: expr6 (LT | LE | GT | GE) expr7 | expr7 ;
+expr7: expr7 (PLUS | MINUS) expr8 | expr8 ;
+expr8: expr8 (MUL | DIV | MOD) expr9 | expr9 ;
+expr9: (NOT | PLUS | MINUS) expr9 | primaryExpr expr9_tail;
+expr9_tail: LBRACK expr RBRACK expr9_tail | ;
 
+primaryExpr
+        : INT_LIT
+        | FLOAT_LIT
+        | STRING_LIT
+        | TRUE
+        | FALSE
+        | arrayLiteral
+        | typeConversionCall
+        | callExpr
+        | ID
+        | LPAREN expr RPAREN
+        ;
 
-pipelineExpr: logicOrExpr pipelineExprTail;
-
-pipelineExprTail: PIPE logicOrExpr pipelineExprTail | ;
-
-
-logicOrExpr: logicAndExpr logicOrExprTail;
-
-logicOrExprTail: OR logicAndExpr logicOrExprTail | ;
-
-
-logicAndExpr: equalExpr logicAndExprTail;
-
-logicAndExprTail: AND equalExpr logicAndExprTail | ;
-
-
-equalExpr: relExpr equalExprTail;
-
-equalExprTail: (EQ | NEQ) relExpr equalExprTail | ;
-
-
-relExpr: addiExpr relExprTail;
-
-relExprTail: (LT | LE | GT | GE) addiExpr relExprTail | ;
-
-
-addiExpr: multiExpr addiExprTail;
-
-addiExprTail: (PLUS | MINUS) multiExpr addiExprTail | ;
-
-
-multiExpr: unaryExpr multiExprTail;
-
-multiExprTail: (MUL | DIV | MOD) unaryExpr multiExprTail | ;
-
-
-unaryExpr: (NOT | PLUS | MINUS) unaryExpr | postfixExpr;
-
-
-postfixExpr: primaryExpr postfixExprTail;
-
-postfixExprTail: postfixOp postfixExprTail | ;
-
-postfixOp: LBRACK expr RBRACK | LPAREN argsOpt RPAREN;
-
-argsOpt: expr argTail | ;
-
-argTail: COMMA expr argTail | ;
-
-primaryExpr: literal | ID | LPAREN expr RPAREN ;
-
-literal: INT_LIT | FLOAT_LIT | STRING_LIT | TRUE | FALSE | arrayLiteral;
-
-arrayLiteral: LBRACK exprOpt RBRACK;
-
-exprOpt: expr exprTail | ;
-
-exprTail: COMMA expr exprTail | ;
-
-lvalue: ID indexTail;
-
-indexTail: LBRACK expr RBRACK indexTail | ;
+typeConversionCall
+        : INT LPAREN exprListOpt RPAREN
+        | FLOAT LPAREN exprListOpt RPAREN
+        | STR LPAREN exprListOpt RPAREN
+        ;
+callExpr: ID LPAREN exprListOpt RPAREN ;
+arrayLiteral: LBRACK exprListOpt RBRACK ;
+exprListOpt: exprList | ;
+exprList: expr exprListTail ;
+exprListTail: COMMA expr exprListTail | ;
 
 /*------------------------------------------------------------------
  *  LEXER RULES
@@ -193,6 +159,7 @@ INT     : 'int' ;
 FLOAT   : 'float' ;
 BOOL    : 'bool' ;
 STRING  : 'string' ;
+STR     : 'str';
 VOID    : 'void' ;
 
 /* Identifiers */
