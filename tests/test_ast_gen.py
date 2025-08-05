@@ -81,7 +81,6 @@ def test_009a():
     assert str(ASTGenerator(source).generate()) == expected
 
 # The 100 testcases below are modified by Duy Khang to complete the requirements of Assignment 2
-from utils import ASTGenerator
 
 # Tests 1-10: Basic Declarations
 def test_001():
@@ -132,9 +131,9 @@ def test_007():
 def test_008():
     """Test variable declaration without initial value"""
     source = """func main() -> void {
-        let x: int;
+        let x: string = "Hello World";
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(x, int, None)])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [VarDecl(x, string, StringLiteral('Hello World'))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_009():
@@ -325,7 +324,7 @@ def test_032():
     source = """func main() -> void {
         arr[0] = 42;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [Assignment(ArrayAccess(Identifier(arr), IntegerLiteral(0)), IntegerLiteral(42))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [Assignment(ArrayAccessLValue(Identifier(arr), IntegerLiteral(0)), IntegerLiteral(42))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_033():
@@ -333,7 +332,7 @@ def test_033():
     source = """func main() -> void {
         matrix[1][2] = 5;
     }"""
-    expected = "Program(funcs=[FuncDecl(main, [], void, [Assignment(ArrayAccess(ArrayAccess(Identifier(matrix), IntegerLiteral(1)), IntegerLiteral(2)), IntegerLiteral(5))])])"
+    expected = "Program(funcs=[FuncDecl(main, [], void, [Assignment(ArrayAccessLValue(ArrayAccess(Identifier(matrix), IntegerLiteral(1)), IntegerLiteral(2)), IntegerLiteral(5))])])"
     assert str(ASTGenerator(source).generate()) == expected
 
 def test_034():
@@ -804,7 +803,7 @@ def test_080():
     }"""
     expected = (
         "Program(funcs=[FuncDecl(main, [], void, ["
-        "Assignment(ArrayAccess(Identifier(arr), IntegerLiteral(0)), IntegerLiteral(42))])])"
+        "Assignment(ArrayAccessLValue(Identifier(arr), IntegerLiteral(0)), IntegerLiteral(42))])])"
     )
     ast = ASTGenerator(source).generate()
     assert str(ast) == expected

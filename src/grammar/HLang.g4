@@ -30,11 +30,7 @@ options{
  *------------------------------------------------------------------*/
 
 // Entry point
-program: decllist* EOF ;
-
-decllist: constdecl | funcdecl ;
-
-decl: vardecl | constdecl | funcdecl;
+program: constdecl* funcdecl* EOF;
 
 // Variable and constant declarations
 constdecl: CONST ID (COLON varType)? ASSIGN expr SEMI ;
@@ -42,7 +38,6 @@ constdecl: CONST ID (COLON varType)? ASSIGN expr SEMI ;
 vardecl: LET ID (COLON varType)? ASSIGN expr SEMI;
 
 funcdecl: FUNC ID paramdecl ARROW returnType body ;
-
 
 varType: nvoidType;
 
@@ -57,8 +52,8 @@ idlist: ID idlistTail ;
 idlistTail: COMMA ID idlistTail | ;
 
 // Parameters
-paramdecl: LPAREN paramList RPAREN ;
-paramList: param paramListTail | ;
+paramdecl: LPAREN paramList? RPAREN ;
+paramList: param paramListTail ;
 paramListTail: COMMA param paramListTail | ;
 param: ID COLON varType ;
 
@@ -88,8 +83,7 @@ breakStmt: BREAK SEMI ;
 continueStmt: CONTINUE SEMI ;
 
 callStmt: callExpr SEMI ;
-returnStmt: RETURN exprReturn SEMI;
-exprReturn: expr | ;
+returnStmt: RETURN expr? SEMI;
 exprStmt: expr SEMI;
 
 assignStmt: lvalue ASSIGN expr SEMI;
@@ -130,6 +124,7 @@ typeConversionCall
         | FLOAT LPAREN exprListOpt RPAREN
         | STR LPAREN exprListOpt RPAREN
         ;
+        
 callExpr: ID LPAREN exprListOpt RPAREN ;
 arrayLiteral: LBRACK exprListOpt RBRACK ;
 exprListOpt: exprList | ;

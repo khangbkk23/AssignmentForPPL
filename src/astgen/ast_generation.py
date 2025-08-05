@@ -4,374 +4,388 @@ This module contains the ASTGeneration class that converts parse trees
 into Abstract Syntax Trees using the visitor pattern.
 """
 
-from ast import expr
 from functools import reduce
 from build.HLangVisitor import HLangVisitor
 from build.HLangParser import HLangParser
 from src.utils.nodes import *
 
-
 class ASTGeneration(HLangVisitor):
     def visitProgram(self, ctx: HLangParser.ProgramContext):
-        decls = self.visit(ctx.decllist())
-        const_decls = [d for d in decls if isinstance(d, ConstDecl)]
-        func_decls = [d for d in decls if isinstance(d, FuncDecl)]
-        return Program(const_decls, func_decls)
-
-    
-    def visitDecllist(self, ctx: HLangParser.DecllistContext):
-        if ctx.getChildCount() == 0:
-            return []
-        decl = self.visit(ctx.decl())
-        tail = self.visit(ctx.decllistTail())
-        return [decl] + tail
-    
-    def visitDecllistTail(self, ctx: HLangParser.DecllistTailContext):
-        if ctx.getChildCount() == 0:
-            return []
-        return [self.visit(ctx.decl())] + self.visit(ctx.decllistTail())
-    
-    def visitDecl(self, ctx: HLangParser.DeclContext):
-        if ctx.vardecl():
-            return self.visit(ctx.vardecl())
-        elif ctx.constdecl():
-            return self.visit(ctx.constdecl())
-        elif ctx.funcdecl():
-            return self.visit(ctx.funcdecl())
-
-    def visitVardecl(self, ctx: HLangParser.VardeclContext):
-        name = ctx.ID().getText()
-        typ = self.visit(ctx.typeOpt())
-        value = self.visit(ctx.expr()) if ctx.expr() else None
-        return VarDecl(name, typ, value)
+        consts = [self.visit(decl) for decl in ctx.constdecl()]
+        funcs = [self.visit(decl) for decl in ctx.funcdecl()]
+        return Program(consts, funcs)
     
     def visitConstdecl(self, ctx: HLangParser.ConstdeclContext):
         name = ctx.ID().getText()
-        typ = self.visit(ctx.typeOpt())
         value = self.visit(ctx.expr())
-        return ConstDecl(name, typ, value)
+        constTyp = self.visit(ctx.varType()) if ctx.varType() else None
+        return ConstDecl(name, constTyp, value)
+    
+    def visitVardecl(self, ctx: HLangParser.VardeclContext):
+        name = ctx.ID().getText()
+        varTyp = self.visit(ctx.varType()) if ctx.varType() else None
+        value = self.visit(ctx.expr())
+        return VarDecl(name, varTyp, value)
     
     def visitFuncdecl(self, ctx: HLangParser.FuncdeclContext):
         name = ctx.ID().getText()
-        params = self.visit(ctx.paramOpt())
-        returnType = self.visit(ctx.typeSpec())
-        body = self.visit(ctx.blockStmt())
-        return FuncDecl(name, params, returnType, body.statements)
+        params = self.visit(ctx.paramdecl())
+        returnType = self.visit(ctx.returnType())
+        body = self.visit(ctx.body())
+        bodyStmt = body.statements
+        return FuncDecl(name, params, returnType, bodyStmt)
     
-    def visitTypeOpt(self, ctx: HLangParser.TypeOptContext):
+    def visitParamdecl(self, ctx: HLangParser.ParamdeclContext):
+        if ctx.paramList():
+            return self.visit(ctx.paramList())
+        return []
+    
+    def visitParamList(self, ctx: HLangParser.ParamListContext):
+        param = [self.visit(ctx.param())]
+        tail = self.visit(ctx.paramListTail())
+        return param + tail
+    
+    def visitParamListTail(self, ctx: HLangParser.ParamListTailContext):
         if ctx.getChildCount() == 0:
-            return None
-        return self.visit(ctx.typeSpec())
-    
-    def visitTypeSpec(self, ctx: HLangParser.TypeSpecContext):
-        return self.visit(ctx.getChild(0))
-    
-    def visitDataType(self, ctx: HLangParser.DataTypeContext):
-        return {
-            "int": IntType(),
-            "float": FloatType(),
-            "bool": BoolType(),
-            "string": StringType(),
-            "void": VoidType()
-        }.get(ctx.getChild(0).getText())
-        
-    def visitArrayType(self, ctx: HLangParser.ArrayTypeContext):
-        elementType = self.visit(ctx.typeSpec())
-        size = int(ctx.INT_LIT().getText())
-        return ArrayType(elementType, size)
+            return []
+        param = self.visit(ctx.param())
+        tail = self.visit(ctx.paramListTail())
+        return [param] + tail
     
     def visitParam(self, ctx: HLangParser.ParamContext):
-        param_name = ctx.ID().getText()
-        param_type = self.visit(ctx.typeSpec())
-        return Param(name=param_name, param_type=param_type)
+        name = ctx.ID().getText()
+        typ = self.visit(ctx.varType())
+        return Param(name, typ)
     
-    def visitParamOpt(self, ctx: HLangParser.ParamOptContext):
-        if ctx.getChildCount() == 0:
-            return []
-        first_param = self.visit(ctx.param())
-        tail = self.visit(ctx.paramTail())
-        return [first_param] + tail
+    def visitVarType(self, ctx: HLangParser.VarTypeContext):
+        return self.visit(ctx.nvoidType())
     
-    def visitParamTail(self, ctx: HLangParser.ParamTailContext):
-        if ctx.getChildCount() == 0:
-            return []
-        this_param = self.visit(ctx.param())
-        rest = self.visit(ctx.paramTail())
-        return [this_param] + rest
-
-    def visitBlockStmt(self, ctx: HLangParser.BlockStmtContext):
-        stmts = self.visit(ctx.stmtList()) if ctx.stmtList() else []
+    def visitReturnType(self, ctx: HLangParser.ReturnTypeContext):
+        if ctx.VOID():
+            return VoidType()
+        return self.visit(ctx.nvoidType())
+    
+    def visitNvoidType(self, ctx: HLangParser.NvoidTypeContext):
+        if ctx.INT():
+            return IntType()
+        if ctx.FLOAT():
+            return FloatType()
+        if ctx.BOOL():
+            return BoolType()
+        if ctx.STRING():
+            return StringType()
+        return self.visit(ctx.arrayType())
+    
+    def visitArrayType(self, ctx: HLangParser.ArrayTypeContext):
+        size = int(ctx.INT_LIT().getText())
+        elementType = self.visit(ctx.nvoidType())
+        return ArrayType(elementType, size)
+    
+    def visitBody(self, ctx: HLangParser.BodyContext):
+        stmts = []
+        for stmt in ctx.stmt():
+            visit = self.visit(stmt)
+            if visit is not None:
+                stmts.append(visit)
         return BlockStmt(stmts)
     
-    def visitStmtList(self, ctx: HLangParser.StmtListContext):
-        if ctx.getChildCount() == 0:
-            return []
-        stmt = self.visit(ctx.stmt())
-        tail = self.visit(ctx.stmtListTail())
-        return [stmt] + tail
-    
-    def visitStmtListTail(self, ctx: HLangParser.StmtListTailContext):
-        if not ctx.getChildCount():
-            return []
-        return [self.visit(ctx.stmt())] + self.visit(ctx.stmtListTail())
+    #* STATEMENTS =================================================
     
     def visitStmt(self, ctx: HLangParser.StmtContext):
-        return self.visit(ctx.getChild(0))
-    
-    # Visit statements
-    
-    def visitAssignStmt(self, ctx: HLangParser.AssignStmtContext):
-        lhs = self.visit(ctx.lvalue())
-        rhs = self.visit(ctx.expr())
-        return Assignment(lhs, rhs)
-    
-    def visitIfStmt(self, ctx: HLangParser.IfStmtContext):
-        cond = self.visit(ctx.expr())
-        thenStmt = self.visit(ctx.blockStmt())
-        elseifList = self.visit(ctx.elseifTail())
-        elseStmt = self.visit(ctx.elseOpt()) if ctx.elseOpt() else None
-        return IfStmt(cond, thenStmt, elseifList, elseStmt)
-
-    def visitElseifTail(self, ctx: HLangParser.ElseifTailContext):
-        if not ctx.getChildCount():
-            return []
-        cond = self.visit(ctx.expr())
-        block = self.visit(ctx.blockStmt())
-        tail = self.visit(ctx.elseifTail())
-        return [(cond, block)] + tail
-
-    def visitElseOpt(self, ctx: HLangParser.ElseOptContext):
+        if ctx.vardecl():
+            return self.visit(ctx.vardecl())
+        
+        if ctx.assignStmt():
+            return self.visit(ctx.assignStmt())
+        
+        if ctx.callStmt():
+            return self.visit(ctx.callStmt())
+        
+        if ctx.returnStmt():
+            return self.visit(ctx.returnStmt())
+        
+        if ctx.ifStmt():
+            return self.visit(ctx.ifStmt())
+        
+        if ctx.whileStmt():
+            return self.visit(ctx.whileStmt())
+        
+        if ctx.forStmt():
+            return self.visit(ctx.forStmt())
+        
+        if ctx.breakStmt():
+            return self.visit(ctx.breakStmt())
+        
+        if ctx.continueStmt():
+            return self.visit(ctx.continueStmt())
+        
+        if ctx.exprStmt():
+            return self.visit(ctx.exprStmt())
+        
         if ctx.blockStmt():
             return self.visit(ctx.blockStmt())
+        
         return None
+
+    def visitAssignStmt(self, ctx: HLangParser.AssignStmtContext):
+        lhs = self.visit(ctx.lvalue()) # Handle left-side operands
+        rhs = self.visit(ctx.expr()) # Handle right-side operands
+        return Assignment(lhs, rhs)
+    
+    def visitLvalue(self, ctx: HLangParser.LvalueContext):
+        name = ctx.ID().getText()
+        indices = self.visit(ctx.lvalueTail())
+        if not indices:
+            return IdLValue(name)
+        base = Identifier(name)
+        for idx in indices[:-1]:
+            base = ArrayAccess(base, idx)
+        return ArrayAccessLValue(base, indices[-1])
+    
+    def visitLvalueTail(self, ctx: HLangParser.LvalueTailContext):
+        if ctx.getChildCount() == 0:
+            return []
+        idx = self.visit(ctx.expr())
+        tail = self.visit(ctx.lvalueTail())
+        return [idx] + tail
+    
+    #* CONDITION AND LOOPS ========================================
+    def visitIfStmt(self, ctx: HLangParser.IfStmtContext):
+        cond = self.visit(ctx.expr())
+        thenStmt = self.visit(ctx.body())
+        elseStmt = self.visit(ctx.elseStmt()) if ctx.elseStmt() else None
+        if isinstance(elseStmt, IfStmt):
+            elifs = [(elseStmt.condition, elseStmt.then_stmt)] + elseStmt.elif_branches
+            return IfStmt(cond, thenStmt, elifs, elseStmt.else_stmt)
+        return IfStmt(cond, thenStmt, [], elseStmt)
+
+    def visitElseStmt(self, ctx: HLangParser.ElseStmtContext):
+        if ctx.ifStmt():
+            return self.visit(ctx.ifStmt())
+        return self.visit(ctx.body())
     
     def visitWhileStmt(self, ctx: HLangParser.WhileStmtContext):
         cond = self.visit(ctx.expr())
-        body = self.visit(ctx.blockStmt())
+        body = self.visit(ctx.body())
         return WhileStmt(cond, body)
     
     def visitForStmt(self, ctx: HLangParser.ForStmtContext):
         name = ctx.ID().getText()
         ite = self.visit(ctx.expr())
-        body = self.visit(ctx.blockStmt())
+        body = self.visit(ctx.body())
         return ForStmt(name, ite, body)
-    
+
+    def visitCallStmt(self, ctx: HLangParser.CallStmtContext):
+        return ExprStmt(self.visit(ctx.callExpr()))
+
     def visitBreakStmt(self, ctx: HLangParser.BreakStmtContext):
         return BreakStmt()
     
     def visitContinueStmt(self, ctx: HLangParser.ContinueStmtContext):
         return ContinueStmt()
     
-    def visitReturnStmt(self, ctx: HLangParser.ReturnStmtContext):
-        if ctx.exprReturn():
-            expr_val = self.visit(ctx.exprReturn())
-            return ReturnStmt(expr_val)
-        else:
-            return ReturnStmt(None)
-        
-    def visitExprReturn(self, ctx: HLangParser.ExprReturnContext):
+    def visitReturnStmt(self, ctx):
         if ctx.expr():
-            return self.visit(ctx.expr())
-        return None
-    
+            return ReturnStmt(self.visit(ctx.expr()))
+        return ReturnStmt(None)
+
     def visitExprStmt(self, ctx: HLangParser.ExprStmtContext):
         return ExprStmt(self.visit(ctx.expr()))
 
+    def visitBlockStmt(self, ctx: HLangParser.BlockStmtContext):
+        stmts = []
+        for stmtContext in ctx.stmt():
+            stmt = self.visit(stmtContext)
+            if stmt is not None:
+                stmts.append(stmt)
+        return BlockStmt(stmts)
+    
+    #* EXPR ========================================================
+
     def visitExpr(self, ctx: HLangParser.ExprContext):
-        return self.visit(ctx.pipelineExpr())
-    
-    
-    def visitPipelineExpr(self, ctx: HLangParser.PipelineExprContext):
-        left = self.visit(ctx.logicOrExpr())
-        tail = self.visit(ctx.pipelineExprTail())
-        for _, expr in tail:
-            left = BinaryOp(left, ">>", expr)
-        return left
+        return self.visit(ctx.expr1())
 
-    def visitPipelineExprTail(self, ctx: HLangParser.PipelineExprTailContext):
-        if not ctx.getChildCount():
-            return []
-        return [(">>", self.visit(ctx.logicOrExpr()))] + self.visit(ctx.pipelineExprTail())
+    def visitExpr1(self, ctx: HLangParser.Expr1Context):
+        return self.visit(ctx.expr2())
 
-    def visitLogicOrExpr(self, ctx: HLangParser.LogicOrExprContext):
-        left = self.visit(ctx.logicAndExpr())
-        tail = self.visit(ctx.logicOrExprTail())
-        for _, expr in tail:
-            left = BinaryOp(left, "||", expr)
-        return left
-
-    def visitLogicOrExprTail(self, ctx: HLangParser.LogicOrExprTailContext):
-        if not ctx.getChildCount():
-            return []
-        return [("||", self.visit(ctx.logicAndExpr()))] + (self.visit(ctx.logicOrExprTail()) or [])
-    
-    def visitLogicAndExpr(self, ctx: HLangParser.LogicAndExprContext):
-        left = self.visit(ctx.equalExpr())
-        tail = self.visit(ctx.logicAndExprTail())
-        for _, expr in tail:
-            left = BinaryOp(left, "&&", expr)
-        return left
-
-    def visitLogicAndExprTail(self, ctx: HLangParser.LogicAndExprTailContext):
-        if not ctx.getChildCount():
-            return []
-        tail = self.visit(ctx.logicAndExprTail()) or []
-        return [("&&", self.visit(ctx.equalExpr()))] + tail
-    
-    def visitEqualExpr(self, ctx: HLangParser.EqualExprContext):
-        left = self.visit(ctx.relExpr())
-        tail = self.visit(ctx.equalExprTail())
-        for op, expr in tail:
-            left = BinaryOp(left, op, expr)
-        return left
-
-    def visitEqualExprTail(self, ctx: HLangParser.EqualExprTailContext):
-        if not ctx.getChildCount():
-            return []
-        op = ctx.EQ().getText() if ctx.EQ() else ctx.NEQ().getText()
-        expr = self.visit(ctx.relExpr())
-        tail = self.visit(ctx.equalExprTail()) or []
-        return [(op, expr)] + tail
-
-    def visitRelExpr(self, ctx: HLangParser.RelExprContext):
-        left = self.visit(ctx.addiExpr())
-        tail = self.visit(ctx.relExprTail())
-        for op, expr in tail:
-            left = BinaryOp(left, op, expr)
-        return left
-
-    def visitRelExprTail(self, ctx: HLangParser.RelExprTailContext):
-        if not ctx.getChildCount():
-            return []
-        op = ctx.getChild(0).getText()
-        tail = self.visit(ctx.relExprTail()) or []
-        return [(op, self.visit(ctx.addiExpr()))] + tail
-
-    def visitAddiExpr(self, ctx: HLangParser.AddiExprContext):
-        left = self.visit(ctx.multiExpr())
-        tail = self.visit(ctx.addiExprTail())
-        for op, expr in tail:
-            left = BinaryOp(left, op, expr)
-        return left
-
-    def visitAddiExprTail(self, ctx: HLangParser.AddiExprTailContext):
-        if not ctx.getChildCount():
-            return []
-        op = ctx.PLUS().getText() if ctx.PLUS() else ctx.MINUS().getText()
-        return [(op, self.visit(ctx.multiExpr()))] + (self.visit(ctx.addiExprTail()) or [])
-
-    def visitMultiExpr(self, ctx: HLangParser.MultiExprContext):
-        left = self.visit(ctx.unaryExpr())
-        tail = self.visit(ctx.multiExprTail())
-        for op, expr in tail:
-            left = BinaryOp(left, op, expr)
-        return left
-
-    def visitMultiExprTail(self, ctx: HLangParser.MultiExprTailContext):
-        if not ctx.getChildCount():
-            return []
-        op = ctx.getChild(0).getText()
-        return [(op, self.visit(ctx.unaryExpr()))] + (self.visit(ctx.multiExprTail()) or [])
-
-    def visitUnaryExpr(self, ctx: HLangParser.UnaryExprContext):
+    def visitExpr2(self, ctx: HLangParser.Expr2Context):
         if ctx.getChildCount() == 1:
-            return self.visit(ctx.postfixExpr())
-        else:
-            op = ctx.getChild(0).getText()
-            operand = self.visit(ctx.unaryExpr())
-            return UnaryOp(op, operand)
+            return self.visit(ctx.expr3())
+        
+        operands = []
+        cur = ctx
+        while isinstance(cur, HLangParser.Expr2Context) and cur.PIPE():
+            operands.append(self.visit(cur.expr3()))
+            cur = cur.expr2()
+        
+        operands.append(self.visit(cur.expr3()))
+        operands = list(reversed(operands))
+        res = operands[0]
+        for op in operands[1:]:
+            res = BinaryOp(res, ">>", op)
+        return res
+            
 
-    def visitPostfixExpr(self, ctx: HLangParser.PostfixExprContext):
-        expr = self.visit(ctx.primaryExpr())
-        ops = self.visit(ctx.postfixExprTail())
-        return self.foldPostfix(expr, ops)
+    def visitExpr3(self, ctx: HLangParser.Expr3Context):
+        if ctx.OR():
+            left = self.visit(ctx.expr3())
+            right = self.visit(ctx.expr4())
+            return BinaryOp(left, "||", right)
+        
+        return self.visit(ctx.expr4())
 
-    def visitPostfixExprTail(self, ctx: HLangParser.PostfixExprTailContext):
-        if not ctx.getChildCount():
-            return []
-        postfix_op = self.visit(ctx.postfixOp())
-        tail = self.visit(ctx.postfixExprTail()) or []
-        return [postfix_op] + tail
-
-    def visitPostfixOp(self, ctx: HLangParser.PostfixOpContext):
-        if ctx.LBRACK():
-            return ("[]", self.visit(ctx.expr()))
-        elif ctx.LPAREN():
-            args = self.visit(ctx.argsOpt())
-            return ("()", args)
+    def visitExpr4(self, ctx: HLangParser.Expr4Context):
+        if ctx.AND():
+            l = self.visit(ctx.expr4())
+            r = self.visit(ctx.expr5())
+            return BinaryOp(l, "&&", r)
+        
+        return self.visit(ctx.expr5())
     
-    def visitArgsOpt(self, ctx: HLangParser.ArgsOptContext):
-        if not ctx.getChildCount():
-            return []
-        return [self.visit(ctx.expr())] + self.visit(ctx.argTail())
+    def visitExpr5(self, ctx: HLangParser.Expr5Context):
+        if ctx.EQ():
+            l = self.visit(ctx.expr5())
+            r = self.visit(ctx.expr6())
+            return BinaryOp(l, "==", r)
+        
+        elif ctx.NEQ():
+            l = self.visit(ctx.expr5())
+            r = self.visit(ctx.expr6())
+            return BinaryOp(l, "!=", r)
+        
+        return self.visit(ctx.expr6())
 
-    def visitArgTail(self, ctx: HLangParser.ArgTailContext):
-        if not ctx.getChildCount():
-            return []
-        expr = self.visit(ctx.expr())
-        tail = self.visit(ctx.argTail()) or []
-        return [expr] + tail
+    def visitExpr6(self, ctx: HLangParser.Expr6Context):
+        if ctx.LT():
+            l = self.visit(ctx.expr6())
+            r = self.visit(ctx.expr7())
+            return BinaryOp(l, "<", r)
+        
+        elif ctx.LE():
+            l = self.visit(ctx.expr6())
+            r = self.visit(ctx.expr7())
+            return BinaryOp(l, "<=", r)
 
-    def foldPostfix(self, base, ops):
-        for kind, val in ops:
-            if kind == "[]":
-                base = ArrayAccess(base, val)
-            elif kind == "()":
-                base = FunctionCall(base, val)
-        return base
-    
-    def visitPrimaryExpr(self, ctx: HLangParser.PrimaryExprContext):
-        if ctx.literal():
-            return self.visit(ctx.literal())
-        if ctx.ID():
-            return Identifier(ctx.ID().getText())
-        if ctx.expr():
-            return self.visit(ctx.expr())
-        if ctx.LBRACK():
-            return ArrayLiteral(self.visit(ctx.exprOpt()))
-    
-    def visitExprOpt(self, ctx: HLangParser.ExprOptContext):
-        if not ctx.getChildCount():
-            return []
-        return [self.visit(ctx.expr())] + self.visit(ctx.exprTail())
+        elif ctx.GT():
+            l = self.visit(ctx.expr6())
+            r = self.visit(ctx.expr7())
+            return BinaryOp(l, ">", r)
+        
+        elif ctx.GE():
+            l = self.visit(ctx.expr6())
+            r = self.visit(ctx.expr7())
+            return BinaryOp(l, ">=", r)
 
-    def visitExprTail(self, ctx: HLangParser.ExprTailContext):
-        if not ctx.getChildCount(): return []
-        expr = self.visit(ctx.expr())
-        tail = self.visit(ctx.exprTail()) or []
-        return [expr] + tail
-    
-    def visitLiteral(self, ctx: HLangParser.LiteralContext):
-        if ctx.INT_LIT():
-            return IntegerLiteral(int(ctx.INT_LIT().getText()))
-        if ctx.FLOAT_LIT():
-            return FloatLiteral(float(ctx.FLOAT_LIT().getText()))
-        if ctx.STRING_LIT():
-            return StringLiteral(ctx.STRING_LIT().getText())
-        if ctx.TRUE():
-            return BooleanLiteral(True)
-        if ctx.FALSE():
-            return BooleanLiteral(False)
-        if ctx.arrayLiteral():
-            return self.visit(ctx.arrayLiteral())
+        return self.visit(ctx.expr7())
 
-    def visitArrayLiteral(self, ctx: HLangParser.ArrayLiteralContext):
-        exprs = self.visit(ctx.exprOpt())
-        return ArrayLiteral(exprs if exprs is not None else [])
+    def visitExpr7(self, ctx: HLangParser.Expr7Context):
+        if ctx.PLUS():
+            l = self.visit(ctx.expr7())
+            r = self.visit(ctx.expr8())
+            return BinaryOp(l, "+", r)
+        
+        elif ctx.MINUS():
+            l = self.visit(ctx.expr7())
+            r = self.visit(ctx.expr8())
+            return BinaryOp(l, "-", r)
+        return self.visit(ctx.expr8())
     
-    def visitLvalue(self, ctx: HLangParser.LvalueContext):
-        name = ctx.ID().getText()
-        indices = self.visit(ctx.indexTail())
+    def visitExpr8(self, ctx: HLangParser.Expr8Context):
+        if ctx.MUL():
+            l = self.visit(ctx.expr8())
+            r = self.visit(ctx.expr9())
+            return BinaryOp(l, "*", r)
+        
+        elif ctx.DIV():
+            l = self.visit(ctx.expr8())
+            r = self.visit(ctx.expr9())
+            return BinaryOp(l, "/", r)
+        
+        elif ctx.MOD():
+            l = self.visit(ctx.expr8())
+            r = self.visit(ctx.expr9())
+            return BinaryOp(l, "%", r)
+        return self.visit(ctx.expr9())
+    
+    def visitExpr9(self, ctx: HLangParser.Expr9Context):
+        if ctx.PLUS():
+            return UnaryOp("+", self.visit(ctx.expr9()))
+        elif ctx.MINUS():
+            return UnaryOp("-", self.visit(ctx.expr9()))
+        elif ctx.NOT():
+            return UnaryOp("!", self.visit(ctx.expr9()))
+        
+        primary = self.visit(ctx.primaryExpr())
+        # Check for ID values:
+        if isinstance(primary, IdLValue):
+            primary = Identifier(primary.name)
+        
+        indices = self.visit(ctx.expr9_tail())
         if not indices:
-            return IdLValue(name)
-        result = Identifier(name)
-        for index in indices:
-            result = ArrayAccess(result, index)
-        return result
+            return primary
+
+        return reduce(lambda acc, cur: ArrayAccess(acc, cur), indices, primary)
+        
     
-    def visitIndexTail(self, ctx: HLangParser.IndexTailContext):
-        if not ctx.getChildCount():
+    def visitExpr9_tail(self, ctx: HLangParser.Expr9_tailContext):
+        if ctx.getChildCount() == 0:
             return []
         index = self.visit(ctx.expr())
-        tail = self.visit(ctx.indexTail()) or []
-        return [index] + tail
+        opt = self.visit(ctx.expr9_tail())
+        return [index] + opt
+    
+    def visitPrimaryExpr(self, ctx: HLangParser.PrimaryExprContext):
+        if ctx.INT_LIT():
+            return IntegerLiteral(int(ctx.INT_LIT().getText()))
+        elif ctx.FLOAT_LIT():
+            return FloatLiteral(float(ctx.FLOAT_LIT().getText()))
+        elif ctx.TRUE():
+            return BooleanLiteral(True)
+        elif ctx.FALSE():
+            return BooleanLiteral(False)
+        elif ctx.STRING_LIT():
+            return StringLiteral(ctx.STRING_LIT().getText())
+        elif ctx.arrayLiteral():
+            return self.visit(ctx.arrayLiteral())
+        elif ctx.callExpr():
+            return self.visit(ctx.callExpr())
+        elif ctx.typeConversionCall():
+            return self.visit(ctx.typeConversionCall())
+        elif ctx.ID():
+            return Identifier(ctx.ID().getText())
+        elif ctx.expr():
+            return self.visit(ctx.expr())
+        return None
+#* CALL==========================================================
+    def visitTypeConversionCall(self, ctx: HLangParser.TypeConversionCallContext):
+        function_name = ""
+        if ctx.INT():
+            function_name = "int"
+        elif ctx.FLOAT():
+            function_name = "float"
+        elif ctx.STR():
+            function_name = "str"
+
+        args = self.visit(ctx.exprListOpt())
+        return FunctionCall(Identifier(function_name), args)
+
+    def visitCallExpr(self, ctx: HLangParser.CallExprContext):
+        args = self.visit(ctx.exprListOpt())
+        name = ctx.ID().getText()
+        return FunctionCall(Identifier(name), args)
+    
+    def visitArrayLiteral(self, ctx: HLangParser.ArrayLiteralContext):
+        return ArrayLiteral(self.visit(ctx.exprListOpt()))
+
+    def visitExprListOpt(self, ctx: HLangParser.ExprListOptContext):
+        if ctx.getChildCount() == 0:
+            return []
+        return self.visit(ctx.exprList())
+    
+    def visitExprList(self, ctx: HLangParser.ExprListContext):
+        return [self.visit(ctx.expr())] + self.visit(ctx.exprListTail())
+    
+    def visitExprListTail(self, ctx: HLangParser.ExprListTailContext):
+        if ctx.getChildCount() == 0:
+            return []
+        return [self.visit(ctx.expr())] + self.visit(ctx.exprListTail())
