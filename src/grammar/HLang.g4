@@ -62,7 +62,6 @@ body: LBRACE stmt* RBRACE;
 
 stmt
     : vardecl
-    | constdecl
     | assignStmt
     | callStmt
     | ifStmt
