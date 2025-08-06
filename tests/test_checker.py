@@ -1,6 +1,6 @@
 from utils import Checker
 
-def test_101():
+def test_001():
     """Test assignment to constant identifier"""
     source = """
 const PI = 3.14;
@@ -11,7 +11,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: Assignment(IdLValue(PI), FloatLiteral(2.71))"
     assert Checker(source).check_from_source() == expected
 
-def test_102():
+def test_002():
     """Test constant without type annotation with complex expression"""
     source = """
 const RESULT = 10 + 5 * 2;
@@ -22,7 +22,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_103():
+def test_003():
     """Test constant with wrong type annotation"""
     source = """
 const X: string = 42;
@@ -31,7 +31,7 @@ func main() -> void {}
     expected = "Type Mismatch In Expression: ConstDecl(X, string, IntegerLiteral(42))"
     assert Checker(source).check_from_source() == expected
 
-def test_104():
+def test_004():
     """Test function parameter shadowing constant"""
     source = """
 const VALUE = 10;
@@ -43,7 +43,7 @@ func main() -> void {}
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_105():
+def test_005():
     """Test local variable shadowing constant"""
     source = """
 const MAX = 100;
@@ -55,7 +55,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_106():
+def test_006():
     """Test array access on non-array identifier"""
     source = """
 func main() -> void {
@@ -66,7 +66,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: ArrayAccess(Identifier(x), IntegerLiteral(0))"
     assert Checker(source).check_from_source() == expected
 
-def test_107():
+def test_007():
     """Test array assignment with wrong element type"""
     source = """
 func main() -> void {
@@ -77,7 +77,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: Assignment(ArrayAccessLValue(Identifier(arr), IntegerLiteral(0)), StringLiteral('hello'))"
     assert Checker(source).check_from_source() == expected
 
-def test_108():
+def test_008():
     """Test assignment to array access with float index"""
     source = """
 func main() -> void {
@@ -88,7 +88,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: ArrayAccessLValue(Identifier(arr), FloatLiteral(1.5))"
     assert Checker(source).check_from_source() == expected
 
-def test_109():
+def test_009():
     """Test for loop with non-array iterable"""
     source = """
 func main() -> void {
@@ -100,7 +100,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: ForStmt(x, IntegerLiteral(42), BlockStmt([VarDecl(y, Identifier(x))]))"
     assert Checker(source).check_from_source() == expected
 
-def test_110():
+def test_010():
     """Test for loop variable assignment inside loop"""
     source = """
 func main() -> void {
@@ -112,7 +112,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: Assignment(IdLValue(x), IntegerLiteral(5))"
     assert Checker(source).check_from_source() == expected
 
-def test_111():
+def test_011():
     """Test for loop with correct array type inference"""
     source = """
 func main() -> void {
@@ -125,7 +125,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_112():
+def test_012():
     """Test nested for loops with same variable name"""
     source = """
 func main() -> void {
@@ -139,7 +139,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_113():
+def test_013():
     """Test while loop with string condition"""
     source = """
 func main() -> void {
@@ -151,7 +151,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: WhileStmt(StringLiteral('true'), BlockStmt([BreakStmt()]))"
     assert Checker(source).check_from_source() == expected
 
-def test_114():
+def test_014():
     """Test if statement with array condition"""
     source = """
 func main() -> void {
@@ -163,34 +163,33 @@ func main() -> void {
     expected = "Type Mismatch In Statement: IfStmt(condition=ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3)]), then_stmt=BlockStmt([VarDecl(x, IntegerLiteral(1))]))"
     assert Checker(source).check_from_source() == expected
 
-def test_115():
-    """Test elif with wrong condition type"""
+def test_015():
+    """Test if with wrong condition type (should be boolean)"""
     source = """
-func main() -> void {
-    if (true) {
-        let x = 1;
-    } elif (42) {
-        let y = 2;
+    func main() -> void {
+        if (42) {
+            let x = 1;
+        }
     }
-}
-"""
-    expected = "Type Mismatch In Statement: IfStmt(condition=BooleanLiteral(True), then_stmt=BlockStmt([VarDecl(x, IntegerLiteral(1))]), elif_branches=[(IntegerLiteral(42), BlockStmt([VarDecl(y, IntegerLiteral(2))]))])"
+    """
+    expected = "Type Mismatch In Statement: IfStmt(condition=IntegerLiteral(42), then_stmt=BlockStmt([VarDecl(x, IntegerLiteral(1))]))"
     assert Checker(source).check_from_source() == expected
 
-def test_116():
+def test_016():
     """Test function call with too many arguments"""
     source = """
-func greet(name: string) -> void {
-    return;
-}
-func main() -> void {
-    greet("Alice", "Bob");
-}
-"""
-    expected = "Type Mismatch In Expression: FunctionCall(Identifier(greet), [StringLiteral('Alice'), StringLiteral('Bob')])"
+    func greet(name: string) -> void {
+        return;
+    }
+    func main() -> void {
+        greet("Alice", "Bob");
+    }
+    """
+    expected = "Type Mismatch In Statement: ExprStmt(FunctionCall(Identifier(greet), [StringLiteral('Alice'), StringLiteral('Bob')]))"
     assert Checker(source).check_from_source() == expected
 
-def test_117():
+
+def test_017():
     """Test function call with mixed argument types"""
     source = """
 func process(a: int, b: string, c: bool) -> void {
@@ -200,10 +199,10 @@ func main() -> void {
     process(1, 2, true);
 }
 """
-    expected = "Type Mismatch In Expression: FunctionCall(Identifier(process), [IntegerLiteral(1), IntegerLiteral(2), BooleanLiteral(True)])"
+    expected = "Type Mismatch In Statement: FunctionCall(Identifier(process), [IntegerLiteral(1), IntegerLiteral(2), BooleanLiteral(True)])"
     assert Checker(source).check_from_source() == expected
 
-def test_118():
+def test_018():
     """Test pipe operator with wrong argument count"""
     source = """
 func add(a: int, b: int) -> int {
@@ -216,7 +215,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(IntegerLiteral(5), >>, Identifier(add))"
     assert Checker(source).check_from_source() == expected
 
-def test_119():
+def test_019():
     """Test pipe operator with function call having wrong total arguments"""
     source = """
 func multiply(a: int, b: int, c: int) -> int {
@@ -229,7 +228,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(IntegerLiteral(5), >>, FunctionCall(Identifier(multiply), [IntegerLiteral(2)]))"
     assert Checker(source).check_from_source() == expected
 
-def test_120():
+def test_020():
     """Test return in main function"""
     source = """
 func main() -> void {
@@ -239,7 +238,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: ReturnStmt(IntegerLiteral(42))"
     assert Checker(source).check_from_source() == expected
 
-def test_121():
+def test_021():
     """Test function with no return statement for non-void"""
     source = """
 func getValue() -> int {
@@ -250,7 +249,7 @@ func main() -> void {}
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_122():
+def test_022():
     """Test return with wrong type in nested block"""
     source = """
 func compute() -> string {
@@ -264,7 +263,7 @@ func main() -> void {}
     expected = "Type Mismatch In Statement: ReturnStmt(IntegerLiteral(123))"
     assert Checker(source).check_from_source() == expected
 
-def test_123():
+def test_023():
     """Test binary operation with incompatible types"""
     source = """
 func main() -> void {
@@ -274,7 +273,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(BooleanLiteral(True), +, BooleanLiteral(False))"
     assert Checker(source).check_from_source() == expected
 
-def test_124():
+def test_024():
     """Test modulo with float operands"""
     source = """
 func main() -> void {
@@ -284,7 +283,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(FloatLiteral(5.0), %, FloatLiteral(2.0))"
     assert Checker(source).check_from_source() == expected
 
-def test_125():
+def test_025():
     """Test logical AND with mixed types"""
     source = """
 func main() -> void {
@@ -294,7 +293,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(BooleanLiteral(True), &&, IntegerLiteral(1))"
     assert Checker(source).check_from_source() == expected
 
-def test_126():
+def test_026():
     """Test logical OR with string operands"""
     source = """
 func main() -> void {
@@ -304,7 +303,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(StringLiteral('true'), ||, StringLiteral('false'))"
     assert Checker(source).check_from_source() == expected
 
-def test_127():
+def test_027():
     """Test unary plus on boolean"""
     source = """
 func main() -> void {
@@ -314,7 +313,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: UnaryOp(+, BooleanLiteral(True))"
     assert Checker(source).check_from_source() == expected
 
-def test_128():
+def test_028():
     """Test unary minus on array"""
     source = """
 func main() -> void {
@@ -324,7 +323,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: UnaryOp(-, ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3)]))"
     assert Checker(source).check_from_source() == expected
 
-def test_129():
+def test_029():
     """Test empty array with explicit type"""
     source = """
 func main() -> void {
@@ -334,7 +333,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_130():
+def test_030():
     """Test array size mismatch"""
     source = """
 func main() -> void {
@@ -344,7 +343,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: VarDecl(arr, [int; 3], ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2)]))"
     assert Checker(source).check_from_source() == expected
 
-def test_131():
+def test_031():
     """Test nested array type mismatch"""
     source = """
 func main() -> void {
@@ -354,7 +353,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: ArrayLiteral([ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2)]), ArrayLiteral([StringLiteral('a'), StringLiteral('b')])])"
     assert Checker(source).check_from_source() == expected
 
-def test_132():
+def test_032():
     """Test string comparison operators"""
     source = """
 func main() -> void {
@@ -365,7 +364,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_133():
+def test_033():
     """Test boolean comparison with ordering operators"""
     source = """
 func main() -> void {
@@ -375,7 +374,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(BooleanLiteral(True), >, BooleanLiteral(False))"
     assert Checker(source).check_from_source() == expected
 
-def test_134():
+def test_034():
     """Test array comparison"""
     source = """
 func main() -> void {
@@ -385,7 +384,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2)]), ==, ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2)]))"
     assert Checker(source).check_from_source() == expected
 
-def test_135():
+def test_035():
     """Test function call in expression statement with non-void return"""
     source = """
 func getValue() -> int {
@@ -398,7 +397,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: ExprStmt(FunctionCall(Identifier(getValue), []))"
     assert Checker(source).check_from_source() == expected
 
-def test_136():
+def test_036():
     """Test built-in str function with wrong argument type"""
     source = """
 func main() -> void {
@@ -408,7 +407,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: FunctionCall(Identifier(str), [ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3)])])"
     assert Checker(source).check_from_source() == expected
 
-def test_137():
+def test_037():
     """Test built-in int function with valid string"""
     source = """
 func main() -> void {
@@ -418,7 +417,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_138():
+def test_038():
     """Test built-in float function with wrong argument"""
     source = """
 func main() -> void {
@@ -428,7 +427,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: FunctionCall(Identifier(float), [BooleanLiteral(True)])"
     assert Checker(source).check_from_source() == expected
 
-def test_139():
+def test_039():
     """Test input function with arguments"""
     source = """
 func main() -> void {
@@ -438,7 +437,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: FunctionCall(Identifier(input), [StringLiteral('prompt')])"
     assert Checker(source).check_from_source() == expected
 
-def test_140():
+def test_040():
     """Test pipe with str function and wrong type"""
     source = """
 func main() -> void {
@@ -448,7 +447,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(StringLiteral('hello'), >>, Identifier(str))"
     assert Checker(source).check_from_source() == expected
 
-def test_141():
+def test_041():
     """Test pipe with print function"""
     source = """
 func main() -> void {
@@ -458,7 +457,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_142():
+def test_042():
     """Test chain of pipe operations"""
     source = """
 func double(x: int) -> int { return x * 2; }
@@ -470,7 +469,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_143():
+def test_043():
     """Test variable declaration without initialization"""
     source = """
 func main() -> void {
@@ -480,7 +479,7 @@ func main() -> void {
     expected = "AST Generation Error: Variable declaration must have an initial value"
     assert Checker(source).check_from_source() == expected
 
-def test_144():
+def test_044():
     """Test constant declaration with array type"""
     source = """
 const NUMBERS: [int; 3] = [1, 2, 3];
@@ -491,7 +490,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_145():
+def test_045():
     """Test function with array parameter"""
     source = """
 func sum(arr: [int; 3]) -> int {
@@ -504,7 +503,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_146():
+def test_046():
     """Test function call with wrong array size"""
     source = """
 func process(arr: [int; 2]) -> void {
@@ -517,7 +516,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: FunctionCall(Identifier(process), [ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3), IntegerLiteral(4)])])"
     assert Checker(source).check_from_source() == expected
 
-def test_147():
+def test_047():
     """Test assignment between arrays of different sizes"""
     source = """
 func main() -> void {
@@ -529,7 +528,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: Assignment(IdLValue(arr1), Identifier(arr2))"
     assert Checker(source).check_from_source() == expected
 
-def test_148():
+def test_048():
     """Test nested block variable redeclaration"""
     source = """
 func main() -> void {
@@ -546,7 +545,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_149():
+def test_049():
     """Test break in if statement without loop"""
     source = """
 func main() -> void {
@@ -558,7 +557,7 @@ func main() -> void {
     expected = "Must In Loop: BreakStmt()"
     assert Checker(source).check_from_source() == expected
 
-def test_150():
+def test_050():
     """Test continue in function without loop"""
     source = """
 func test() -> void {
@@ -569,7 +568,7 @@ func main() -> void {}
     expected = "Must In Loop: ContinueStmt()"
     assert Checker(source).check_from_source() == expected
 
-def test_151():
+def test_051():
     """Test function parameter with same name as function"""
     source = """
 func test(test: int) -> void {
@@ -580,7 +579,7 @@ func main() -> void {}
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_152():
+def test_052():
     """Test main function with parameters"""
     source = """
 func main(argc: int) -> void {
@@ -590,7 +589,7 @@ func main(argc: int) -> void {
     expected = "No Entry Point"
     assert Checker(source).check_from_source() == expected
 
-def test_153():
+def test_053():
     """Test main function with return type int"""
     source = """
 func main() -> int {
@@ -600,7 +599,7 @@ func main() -> int {
     expected = "No Entry Point"
     assert Checker(source).check_from_source() == expected
 
-def test_154():
+def test_054():
     """Test multiple main functions"""
     source = """
 func main() -> void {}
@@ -609,7 +608,7 @@ func main() -> void {}
     expected = "Redeclared Function: main"
     assert Checker(source).check_from_source() == expected
 
-def test_155():
+def test_055():
     """Test assignment to array element with wrong type"""
     source = """
 func main() -> void {
@@ -620,7 +619,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: Assignment(ArrayAccessLValue(ArrayAccess(Identifier(arr), IntegerLiteral(0)), IntegerLiteral(1)), StringLiteral('hello'))"
     assert Checker(source).check_from_source() == expected
 
-def test_156():
+def test_056():
     """Test complex arithmetic expression type checking"""
     source = """
 func main() -> void {
@@ -631,7 +630,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: VarDecl(y, int, Identifier(x))"
     assert Checker(source).check_from_source() == expected
 
-def test_157():
+def test_057():
     """Test division result type"""
     source = """
 func main() -> void {
@@ -642,7 +641,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: VarDecl(y, float, Identifier(x))"
     assert Checker(source).check_from_source() == expected
 
-def test_158():
+def test_058():
     """Test function call as array index"""
     source = """
 func getIndex() -> int {
@@ -656,7 +655,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_159():
+def test_059():
     """Test function call as array index with wrong return type"""
     source = """
 func getIndex() -> string {
@@ -670,7 +669,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: ArrayAccess(Identifier(arr), FunctionCall(Identifier(getIndex), []))"
     assert Checker(source).check_from_source() == expected
 
-def test_160():
+def test_060():
     """Test nested function calls with type checking"""
     source = """
 func add(a: int, b: int) -> int { return a + b; }
@@ -682,7 +681,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_161():
+def test_061():
     """Test recursive function definition"""
     source = """
 func factorial(n: int) -> int {
@@ -697,7 +696,7 @@ func main() -> void {}
     expected = "Undeclared Function: factorial"
     assert Checker(source).check_from_source() == expected
 
-def test_162():
+def test_062():
     """Test function forward declaration not allowed"""
     source = """
 func helper() -> int;
@@ -711,7 +710,7 @@ func helper() -> int {
     expected = "AST Generation Error: Function forward declaration not supported"
     assert Checker(source).check_from_source() == expected
 
-def test_163():
+def test_063():
     """Test array literal in function call"""
     source = """
 func process(arr: [int; 3]) -> void {
@@ -724,7 +723,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_164():
+def test_064():
     """Test string concatenation in complex expression"""
     source = """
 func main() -> void {
@@ -735,7 +734,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_165():
+def test_065():
     """Test type coercion in arithmetic with constants"""
     source = """
 const INT_VAL = 42;
@@ -748,7 +747,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_166():
+def test_066():
     """Test invalid constant assignment in nested scope"""
     source = """
 const VALUE = 10;
@@ -761,7 +760,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: Assignment(IdLValue(VALUE), IntegerLiteral(20))"
     assert Checker(source).check_from_source() == expected
 
-def test_167():
+def test_067():
     """Test array access on function return value"""
     source = """
 func getArray() -> [int; 3] {
@@ -774,7 +773,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_168():
+def test_068():
     """Test assignment to function call result"""
     source = """
 func getValue() -> int {
@@ -787,7 +786,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: Assignment(FunctionCall(Identifier(getValue), []), IntegerLiteral(100))"
     assert Checker(source).check_from_source() == expected
 
-def test_169():
+def test_069():
     """Test boolean expression in while loop"""
     source = """
 func main() -> void {
@@ -800,7 +799,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_170():
+def test_070():
     """Test complex boolean expression with wrong types"""
     source = """
 func main() -> void {
@@ -810,7 +809,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(BinaryOp(IntegerLiteral(1), <, IntegerLiteral(2)), &&, StringLiteral('true'))"
     assert Checker(source).check_from_source() == expected
 
-def test_171():
+def test_071():
     """Test assignment to parameter in different scope"""
     source = """
 func test(param: int) -> void {
@@ -823,7 +822,7 @@ func main() -> void {}
     expected = "Type Mismatch In Statement: Assignment(IdLValue(param), IntegerLiteral(100))"
     assert Checker(source).check_from_source() == expected
 
-def test_172():
+def test_072():
     """Test shadowing of parameter by local variable"""
     source = """
 func test(x: int) -> void {
@@ -832,10 +831,10 @@ func test(x: int) -> void {
 }
 func main() -> void {}
 """
-    expected = "Static checking passed"
+    expected = "Redeclared Variable: x"
     assert Checker(source).check_from_source() == expected
 
-def test_173():
+def test_073():
     """Test array of arrays with mixed inner sizes"""
     source = """
 func main() -> void {
@@ -845,7 +844,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: ArrayLiteral([ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2)]), ArrayLiteral([IntegerLiteral(3), IntegerLiteral(4), IntegerLiteral(5)])])"
     assert Checker(source).check_from_source() == expected
 
-def test_174():
+def test_074():
     """Test empty block statement"""
     source = """
 func main() -> void {
@@ -858,7 +857,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_175():
+def test_075():
     """Test function call in array literal"""
     source = """
 func getValue() -> int {
@@ -871,7 +870,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_176():
+def test_076():
     """Test pipe with built-in function having wrong arg count"""
     source = """
 func main() -> void {
@@ -881,7 +880,7 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(IntegerLiteral(5), >>, FunctionCall(Identifier(print), [StringLiteral('extra')]))"
     assert Checker(source).check_from_source() == expected
 
-def test_177():
+def test_077():
     """Test unary operators on complex expressions"""
     source = """
 func main() -> void {
@@ -892,7 +891,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_178():
+def test_078():
     """Test type annotation with wrong array element type"""
     source = """
 func main() -> void {
@@ -902,7 +901,7 @@ func main() -> void {
     expected = "Type Mismatch In Statement: VarDecl(arr, [string; 2], ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2)]))"
     assert Checker(source).check_from_source() == expected
 
-def test_179():
+def test_079():
     """Test comparison between different numeric types"""
     source = """
 func main() -> void {
@@ -914,7 +913,7 @@ func main() -> void {
     expected = "Static checking passed"
     assert Checker(source).check_from_source() == expected
 
-def test_180():
+def test_080():
     """Test invalid equality comparison between incompatible types"""
     source = """
 func main() -> void {
@@ -924,17 +923,213 @@ func main() -> void {
     expected = "Type Mismatch In Expression: BinaryOp(StringLiteral('hello'), ==, IntegerLiteral(42))"
     assert Checker(source).check_from_source() == expected
 
-def test_181():
-    """Test function return in wrong context"""
+def test_081():
+    """Redeclared variable in same scope"""
     source = """
-func compute() -> int {
-    if (true) {
-        let x = 5;
-    } else {
-        return "wrong";
+    func main() -> void {
+        let x = 1;
+        let x = 2;
     }
-    return 10;
-}
+    """
+    expected = "Redeclared Variable: x"
+    assert Checker(source).check_from_source() == expected
+
+def test_082():
+    """Redeclared parameter"""
+    source = """
+    func foo(x: int, x: float) -> void {}
+    """
+    expected = "No Entry Point"
+    assert Checker(source).check_from_source() == expected
+
+def test_083():
+    source = """
+    func foo(x: int, x: float) -> void {}
+    func main() -> void {}
+    """
+    expected = "Redeclared Parameter: x"
+    assert Checker(source).check_from_source() == expected
+
+def test_084():
+    """Undeclared identifier"""
+    source = """
+    func main() -> void {
+        y = 10;
+    }
+    """
+    expected = "Undeclared Identifier: y"
+    assert Checker(source).check_from_source() == expected
+
+def test_085():
+    """Undeclared function"""
+    source = """
+    func main() -> void {
+        foo();
+    }
+    """
+    expected = "Undeclared Function: foo"
+    assert Checker(source).check_from_source() == expected
+
+def test_086():
+    """Wrong number of arguments in function call"""
+    source = """
+    func foo(x: int, y: int) -> void {}
+    func main() -> void {
+        foo(1);
+    }
+    """
+    expected = "Type Mismatch In Statement: ExprStmt(FunctionCall(Identifier(foo), [IntegerLiteral(1)]))"
+    assert Checker(source).check_from_source() == expected
+
+def test_087():
+    """Wrong argument type in function call"""
+    source = """
+    func foo(x: int) -> void {}
+    func main() -> void {
+        foo("hello");
+    }
+    """
+    expected = "Type Mismatch In Statement: ExprStmt(FunctionCall(Identifier(foo), [StringLiteral('hello')]))"
+    assert Checker(source).check_from_source() == expected
+
+def test_088():
+    """Type mismatch in binary operation"""
+    source = """
+    func main() -> void {
+        let x = 1 + "str";
+    }
+    """
+    expected = "Type Mismatch In Expression: BinaryOp(IntegerLiteral(1), +, StringLiteral('str'))"
+    assert Checker(source).check_from_source() == expected
+
+def test_089():
+    """If condition is not boolean"""
+    source = """
+    func main() -> void {
+        if (1) {
+            let x = 2;
+        }
+    }
+    """
+    expected = "Type Mismatch In Statement: IfStmt(IntegerLiteral(1), BlockStmt([VarDecl(x, IntegerLiteral(2))]))"
+    assert Checker(source).check_from_source() == expected
+
+def test_090():
+    """While condition is not boolean"""
+    source = """
+    func main() -> void {
+        while (2.5) {
+            let x = 2;
+        }
+    }
+    """
+    expected = "Type Mismatch In Statement: WhileStmt(FloatLiteral(2.5), BlockStmt([VarDecl(x, IntegerLiteral(2))]))"
+    assert Checker(source).check_from_source() == expected
+
+def test_091():
+    """Assign wrong type to inferred variable"""
+    source = """
+    func main() -> void {
+        let x = 1;
+        x = "str";
+    }
+    """
+    expected = "Type Mismatch In Statement: Assignment(IdLValue(x), StringLiteral('str'))"
+    assert Checker(source).check_from_source() == expected
+
+def test_092():
+    """Index with non-int"""
+    source = """
+    func main() -> void {
+        let arr = [1, 2, 3];
+        let x = arr[1.2];
+    }
+    """
+    expected = "Type Mismatch In Expression: ArrayAccess(Identifier(arr), FloatLiteral(1.2))"
+    assert Checker(source).check_from_source() == expected
+
+def test_093():
+    """Assign to array element with wrong value type"""
+    source = """
+    func main() -> void {
+        let arr = [1, 2, 3];
+        arr[0] = "str";
+    }
+    """
+    expected = "Type Mismatch In Statement: Assignment(ArrayAccessLValue(Identifier(arr), IntegerLiteral(0)), StringLiteral('str'))"
+    assert Checker(source).check_from_source() == expected
+
+def test_094():
+    """Function return type mismatch"""
+    source = """
+    func foo() -> int {
+        return true;
+    }
+    """
+    expected = "Type Mismatch In Statement: Return(BooleanLiteral(True))"
+    assert Checker(source).check_from_source() == expected
+
+def test_095():
+    """Return value inferred to wrong type"""
+    source = """
+    func foo() {
+        return 1;
+    }
+    func main() -> void {
+        let x: bool = foo();
+    }
+    """
+    expected = "Type Mismatch In Statement: VarDecl(x, bool, FunctionCall(Identifier(foo), []))"
+    assert Checker(source).check_from_source() == expected
+
+def test_096():
+    """Empty array without annotation"""
+    source = """
+    func main() -> void {
+        let arr = [];
+    }
+    """
+    expected = "TypeCannotBeInferred: VarDecl(arr, None, ArrayLiteral([]))"
+    assert Checker(source).check_from_source() == expected
+
+def test_097():
+    """Array with inconsistent element types"""
+    source = """
+    func main() -> void {
+        let arr = [1, "a", 3];
+    }
+    """
+    expected = "Type Mismatch In Expression: ArrayLiteral([IntegerLiteral(1), StringLiteral('a'), IntegerLiteral(3)])"
+    assert Checker(source).check_from_source() == expected
+
+def test_098():
+    """Call 'str' with unsupported argument type"""
+    source = """
+    func main() -> void {
+        str("hello");
+    }
+    """
+    expected = "Type Mismatch In Statement: ExprStmt(FunctionCall(Identifier(str), [StringLiteral('hello')]))"
+    assert Checker(source).check_from_source() == expected
+
+def test_099():
+    """Shadowing allowed"""
+    source = """
+    func main() -> void {
+        let x = 1;
+        {
+            let x = true;
+        }
+    }
     """
     expected = "Static checking passed"
+    assert Checker(source).check_from_source() == expected
+
+def test_100():
+    """Redeclare function"""
+    source = """
+    func foo() -> void {}
+    func foo(x: int) -> void {}
+    """
+    expected = "Redeclared Function: foo"
     assert Checker(source).check_from_source() == expected

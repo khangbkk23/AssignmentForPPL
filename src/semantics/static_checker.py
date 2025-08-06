@@ -285,13 +285,10 @@ class StaticChecker(ASTVisitor):
             raise Undeclared(FunctionMarker(), node.expr.function.name)
 
         elif isinstance(node.expr, BinaryOp) and node.expr.operator == '>>':
-            try:
-                expr_type = self.visit(node.expr, param)
-                if not isinstance(expr_type, VoidType):
-                    raise TypeMismatchInStatement(node)
-            except TypeMismatchInExpression:
+            expr_type = self.visit(node.expr, param)
+            if not isinstance(expr_type, VoidType):
                 raise TypeMismatchInStatement(node)
-
+        
         else:
             self.visit(node.expr, param)
 
