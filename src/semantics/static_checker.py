@@ -98,7 +98,7 @@ class StaticChecker(ASTVisitor):
     def visit_program(self, node: 'Program', param: List):
         main_found = False
         for func in node.func_decls:
-            if isinstance(func.return_type, VoidType) and len(func.params) == 0:
+            if func.name == "main" and isinstance(func.return_type, VoidType) and len(func.params) == 0:
                 main_found = True
                 break
         
@@ -171,8 +171,15 @@ class StaticChecker(ASTVisitor):
     def visit_var_decl(self, node: 'VarDecl', param: List[List['Symbol']]) -> Symbol:
         if self.lookup(node.name, param[0], lambda x: x.name):
             raise Redeclared('Variable', node.name)
+        
+        if isinstance(node.value, ArrayLiteral) and not node.value.elements:
+            if node.type_annotation is None:
+                raise TypeCannotBeInferred(node)
+            final_type = node.type_annotation
+            return Symbol(node.name, final_type, is_constant=False)
 
         value_type = self.visit(node.value, param)
+
         if node.type_annotation:
             if not self.compare_types(value_type, node.type_annotation):
                 raise TypeMismatchInStatement(node)
@@ -181,8 +188,9 @@ class StaticChecker(ASTVisitor):
             if isinstance(value_type, Unknown):
                 raise TypeCannotBeInferred(node)
             final_type = value_type
-        
+
         return Symbol(node.name, final_type, is_constant=False)
+
     
     def visit_assignment(self, node: 'Assignment', param: List[List['Symbol']]) -> None:
         def check_declared_const(lvalue, param):
@@ -288,7 +296,6 @@ class StaticChecker(ASTVisitor):
             expr_type = self.visit(node.expr, param)
             if not isinstance(expr_type, VoidType):
                 raise TypeMismatchInStatement(node)
-        
         else:
             self.visit(node.expr, param)
 
@@ -315,7 +322,7 @@ class StaticChecker(ASTVisitor):
         if not isinstance(array_type, ArrayType):
             raise TypeMismatchInExpression(node)
         if not isinstance(index_type, IntType):
-            raise TypeMismatchInExpression(node.index)
+            raise TypeMismatchInExpression(node)
         
         return array_type.element_type
 
