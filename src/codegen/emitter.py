@@ -730,7 +730,7 @@ class Emitter:
         Returns:
             Tuple of (value, type)
         """
-        if type(ast) is IntLiteral:
+        if type(ast) is IntegerLiteral:
             return (str(ast.value), IntType())
 
     def emit_if_true(self, label: int, frame) -> str:
