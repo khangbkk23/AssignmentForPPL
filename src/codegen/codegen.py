@@ -139,16 +139,16 @@ class CodeGenerator(ASTVisitor):
     # Type system
 
     def visit_int_type(self, node: "IntType", o: Any = None):
-        pass
+        return self.emit.emit_push_iconst(node.value, o.frame), IntType()
 
     def visit_float_type(self, node: "FloatType", o: Any = None):
-        pass
+        return self.emit.emit_push_fconst(node.value, o.frame), FloatType()
 
     def visit_bool_type(self, node: "BoolType", o: Any = None):
-        pass
+        return self.emit.emit_push_const(node.value, o.frame), BoolType()
 
     def visit_string_type(self, node: "StringType", o: Any = None):
-        pass
+        return self.emit.emit_push_const(node.value, o.frame), StringType()
 
     def visit_void_type(self, node: "VoidType", o: Any = None):
         pass
@@ -200,13 +200,25 @@ class CodeGenerator(ASTVisitor):
         pass
 
     def visit_return_stmt(self, node: "ReturnStmt", o: Any = None):
-        pass
+        frame = o.frame
+        code = ""
+
+        if node.expr:
+            expr_code, expr_type = self.visit(node.expr, o)
+            code += expr_code
+            code += self.emit.emit_return(expr_type, frame)
+        else:
+            code += self.emit.emit_return(VoidType(), frame)
+
+        return code, None
 
     def visit_break_stmt(self, node: "BreakStmt", o: Any = None):
-        pass
+        self.emit.print_out(self.emit.emit_goto(o.frame.get_break_label(), o.frame))
+        return o
 
     def visit_continue_stmt(self, node: "ContinueStmt", o: Any = None):
-        pass
+        self.emit.print_out(self.emit.emit_goto(o.frame.get_continue_label(), o.frame))
+        return o
 
     def visit_expr_stmt(self, node: "ExprStmt", o: SubBody = None):
         code, typ = self.visit(node.expr, Access(o.frame, o.sym))
@@ -259,13 +271,60 @@ class CodeGenerator(ASTVisitor):
         )
 
     def visit_array_access(self, node: "ArrayAccess", o: Any = None):
-        pass
+        array_code, array_typ = self.visit(node.arr, o)
+        idx_code, idx_typ = self.visit(node.idx, o)
+        
+        if o.is_left:
+            code = array_code + idx_code
+            code += self.emit.emit_astore(array_typ.type, o.frame)
+            return code, array_typ.element_type
+        else:
+            code = array_code + idx_code
+            code += self.emit.emit_aload(array_typ.element_type, o.frame)
+            return code, array_typ.eleType
 
     def visit_array_literal(self, node: "ArrayLiteral", o: Any = None):
-        pass
+        element_code = ""
+        element_types = []
+
+        for elem in node.elements:
+            ec, et = self.visit(elem, o)
+            element_code += ec
+            element_types.append(et)
+
+        element_type = element_types[0]
+        arr_type = ArrayType(element_type, len(node.elements))
+
+        code = ""
+        code += self.emit.emit_push_const(len(node.elements), o.frame)
+        code += self.emit.emit_new_array(element_type)
+
+        for i, elem in enumerate(node.elements):
+            ec, _ = self.visit(elem, o)
+            code += self.emit.emit_dup(o.frame)
+            code += self.emit.emit_push_iconst(i, o.frame)
+            code += ec
+            code += self.emit.emit_astore(element_type, o.frame)
+
+        return code, arr_type
+
 
     def visit_identifier(self, node: "Identifier", o: Any = None):
-        pass
+        sym = next(filter(lambda x: x.name == node.name, o.sym), None)
+        if o.is_left:
+            if isinstance(sym.value, Index):
+                code = self.emit.emit_write_var(sym.name, sym.type, sym.value.value, o.frame)
+            
+            elif isinstance(sym.value, CName):
+                code = self.emit.emit_put_static(sym.value.value + "." + sym.name, sym.mtype, o.frame) 
+        else:
+            if type(sym.value) is Index:
+                code = self.emit.emit_read_var(sym.name, sym.type, sym.value.value, o.frame)
+            else:
+                 code = self.emit.emit_get_static(sym.value.value + "." + sym.name, sym.mtype, o.frame)
+        
+        return code, sym.type
+                
 
     # Literals
 
@@ -273,13 +332,10 @@ class CodeGenerator(ASTVisitor):
         return self.emit.emit_push_iconst(node.value, o.frame), IntType()
 
     def visit_float_literal(self, node: "FloatLiteral", o: Any = None):
-        pass
+        return self.emit.emit_push_fconst(node.value, o.frame), FloatType()
 
     def visit_boolean_literal(self, node: "BooleanLiteral", o: Any = None):
-        pass
+        return self.emit.emit_push_iconst(node.value, o.frame), BoolType()
 
     def visit_string_literal(self, node: "StringLiteral", o: Any = None):
-        return (
-            self.emit.emit_push_const('"' + node.value + '"', StringType(), o.frame),
-            StringType(),
-        )
+        return self.emit.emit_push_const(node.value, o.frame), StringType()
