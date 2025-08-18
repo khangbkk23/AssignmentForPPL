@@ -191,10 +191,89 @@ class CodeGenerator(ASTVisitor):
         return o
 
     def visit_if_stmt(self, node: "IfStmt", o: Any = None):
-        pass
+        frame = o.frame
+        sym = o.sym
+        
+        end_label = frame.get_new_label()
+        false_label = frame.get_new_label()
+        
+        # Generate code for the condition expr
+        cond_code, cond_type = self.visit(node.condition, Access(frame, sym, False))
+        self.emit.print_out(cond_code)
+        
+        # Jump to false_label if false
+        self.emit.print_out(self.emit.emit_if_false(false_label, frame))
+        
+        # Generate code for then_stmt
+        self.visit(node.then_stmt, o)
+        
+        # Jump to end_label with all case
+        self.emit.print_out(self.emit.emit_goto(end_label, frame))
+        
+        # Put false_label
+        self.emit.print_out(self.emit.emit_label(false_label, frame))
+        
+        ## Handle else_if
+        if node.elif_branches:
+            for (elif_cond, elif_block) in node.elif_branches:
+                next_false_label = frame.get_new_label()
+                
+                # Generate code for the elif condition expr
+                ec, et = self.visit(elif_cond, Access(frame, sym, False))
+                self.emit.print_out(ec)
+                
+                # Jump to next_false_label if False
+                self.emit.print_out(self.emit.emit_if_false(next_false_label, frame))
+                
+                # Generate code for elif 
+                self.visit(elif_block, o)
+                self.emit.print_out(self.emit.emit_goto(end_label, frame))
+                
+                # Put next_false_label
+                self.emit.print_out(self.emit.emit_label(next_false_label, frame))
+        
+        if node.else_stmt:
+            # Generate code for else_stmt
+            self.visit(node.else_stmt, o)
+        
+        # Put end_label
+        self.emit.print_out(self.emit.emit_label(end_label, frame))
 
+        return o
+            
+        
+    
     def visit_while_stmt(self, node: "WhileStmt", o: Any = None):
-        pass
+        frame = o.frame
+        sym = o.sym
+
+        # Generate labels
+        frame.enter_loop()
+        continue_label = frame.get_continue_label()
+        break_label = frame.get_break_label()
+        
+        # Put continue_label
+        self.emit.print_out(self.emit.emit_label(continue_label, frame))
+        
+        # Generate code for condition expr
+        cond_code, cond_type = self.visit(node.condition, Access(frame, sym, False))
+        self.emit.print_out(cond_code)
+        
+        # Jump to break_label if False
+        self.emit.print_out(self.emit.emit_if_false(break_label, frame))
+        
+        # Generate code for body
+        self.visit(node.body, o)
+        
+        # Jump to continue_label with all cases
+        self.emit.print_out(self.emit.emit_goto(continue_label, frame))
+        
+        # Put break_label
+        self.emit.print_out(self.emit.emit_label(break_label, frame))
+
+        frame.exit_loop()
+        
+        return o
 
     def visit_for_stmt(self, node: "ForStmt", o: Any = None):
         pass
@@ -223,9 +302,21 @@ class CodeGenerator(ASTVisitor):
     def visit_expr_stmt(self, node: "ExprStmt", o: SubBody = None):
         code, typ = self.visit(node.expr, Access(o.frame, o.sym))
         self.emit.print_out(code)
+        return o
 
     def visit_block_stmt(self, node: "BlockStmt", o: Any = None):
-        pass
+        frame = o.frame
+        sym = o.sym
+        
+        frame.enter_scope(False)
+        
+        for stmt in node.statements:
+            self.visit(stmt, SubBody(frame, sym))
+            
+        frame.exit_scope()
+        
+        return o
+        
 
     # Left-values
 
@@ -243,15 +334,145 @@ class CodeGenerator(ASTVisitor):
         return code, sym.type
 
     def visit_array_access_lvalue(self, node: "ArrayAccessLValue", o: Any = None):
-        pass
+        frame = o.frame
+        sym = o.sym
+
+        arr_code, arr_type = self.visit(node.array, Access(frame, sym, False))
+
+        idx_code, idx_type = self.visit(node.index, Access(frame, sym, False))
+
+    
+        code = arr_code
+        code += idx_code
+        code += self.emit.emit_array_cell(arr_type, is_left=True, frame=frame)
+
+        return code, arr_type.ele_type
+
 
     # Expressions
 
     def visit_binary_op(self, node: "BinaryOp", o: Any = None):
-        pass
+        frame = o.frame
+        sym = o.sym
+        
+        # Get operators
+        op = node.operator
+        
+        # Generate code for left and right operands
+        left_code, left_type = self.visit(node.left, Access(frame, sym, False))
+        right_code, right_type = self.visit(node.right, Access(frame, sym, False))
+        
+        if type(left_type) is type(right_type):
+            rt = left_type
+        elif isinstance(left_type, IntType) and isinstance(right_type, FloatType):
+            left_code += self.emit.emit_i2f(frame)
+            rt = FloatType()
+        elif isinstance(left_type, FloatType) and isinstance(right_type, IntType):
+            right_code += self.emit.emit_i2f(frame)
+            rt = FloatType()
+        
+        if op in ['+', '-']:
+            opc = self.emit.emit_add_op(op, rt, frame)
+        
+        elif op == '*':
+            opc = self.emit.emit_mul_op(op, rt, frame)
+        
+        elif op == '/':
+            if isinstance(rt, IntType):
+                left_code += self.emit.emit_i2f(frame)
+                right_code += self.emit.emit_i2f(frame)
+                rt = FloatType()
+            opc = self.emit.emit_mul_op(op, rt, frame)
+            
+        elif op == '%':
+            opc = self.emit.emit_mod(frame)
+            rt = IntType()
+            
+        elif op == ">>":
+            rt = IntType()
+            pass
+            
+        elif op in ['==', '!=', '<', '<=', '>', '>=']:
+            opc = self.emit.emit_rel_op(op, rt, frame)
+            rt = BoolType()
+
+        elif op in ['&&', '||']:
+            rt = BoolType()
+            if op == '&&':
+                false_label = frame.get_new_label()
+                end_label = frame.get_new_label()
+
+                # left operand
+                code += left_code
+                code += self.emit.emit_if_false(false_label, frame)
+
+                # right operand
+                code += right_code
+                code += self.emit.emit_if_false(false_label, frame)
+
+                # All is True
+                code += self.emit.emit_push_iconst(1, frame)
+                code += self.emit.emit_goto(end_label, frame)
+
+                # One if False
+                code += self.emit.emit_label(false_label, frame)
+                code += self.emit.emit_push_iconst(0, frame)
+
+                # End
+                code += self.emit.emit_label(end_label, frame)
+                return code, rt
+            
+            else:
+                true_label = frame.get_new_label()
+                end_label = frame.get_new_label()
+                code = ""
+
+                # left operand
+                code += left_code
+                code += self.emit.emit_if_true(true_label, frame)
+
+
+                code += right_code
+                code += self.emit.emit_if_true(true_label, frame)
+
+                # Both false, push 0
+                code += self.emit.emit_push_iconst(0, frame)
+                code += self.emit.emit_goto(end_label, frame)
+
+                # True case, push 1
+                code += self.emit.emit_label(true_label, frame)
+                code += self.emit.emit_push_iconst(1, frame)
+
+                # End
+                code += self.emit.emit_label(end_label, frame)
+                return code, rt
+        
+        code = left_code + right_code + opc
+        return code, rt
 
     def visit_unary_op(self, node: "UnaryOp", o: Any = None):
-        pass
+        frame = o.frame
+        opc, opt = self.visit(node.operand, o)
+        op = node.operator
+
+        if op == "!": 
+            code = opc + self.emit.emit_not(opt, frame)
+            rt = opt
+
+        elif op == "-":
+            code = opc + self.emit.emit_neg_op(opt, frame)
+            rt = opt
+
+        elif op == "+":
+            code = opc
+            rt = opt
+
+        else:
+            code = opc
+            rt = opt
+
+        return code, rt
+
 
     def visit_function_call(self, node: "FunctionCall", o: Access = None):
         function_name = node.function.name
@@ -271,17 +492,22 @@ class CodeGenerator(ASTVisitor):
         )
 
     def visit_array_access(self, node: "ArrayAccess", o: Any = None):
-        array_code, array_typ = self.visit(node.arr, o)
-        idx_code, idx_typ = self.visit(node.idx, o)
-        
+        frame = o.frame
+
+        # Generate code for array and index
+        array_code, array_typ = self.visit(node.array, o)
+        index_code, index_typ = self.visit(node.index, o)
+
+        # kiểm tra array phải là ArrayType
+        ele_type = array_typ.eleType
+
         if o.is_left:
-            code = array_code + idx_code
-            code += self.emit.emit_astore(array_typ.type, o.frame)
-            return code, array_typ.element_type
+            code = array_code + index_code
+            return code, ele_type
         else:
-            code = array_code + idx_code
-            code += self.emit.emit_aload(array_typ.element_type, o.frame)
-            return code, array_typ.eleType
+            code = array_code + index_code
+            code += self.emit.emit_aload(ele_type, frame)
+            return code, ele_type
 
     def visit_array_literal(self, node: "ArrayLiteral", o: Any = None):
         element_code = ""
