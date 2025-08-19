@@ -101,23 +101,28 @@ class CodeGenerator(ASTVisitor):
         frame.exit_scope()
 
     def visit_const_decl(self, node: "ConstDecl", o: Any = None):
-        pass
+        self.emit.print_out(self.emit.emit_attribute(node.name, node.type_annotation, True, node.value))
+        return SubBody(o.frame if o else None, [Symbol(node.name, node.type_annotation, CName(self.class_name))] + (o.sym if o else []))
 
     def visit_func_decl(self, node: "FuncDecl", o: SubBody = None):
-        frame = Frame(node.name, node.return_type)
-        self.generate_method(node, SubBody(frame, o.sym))
-        param_types = list(map(lambda x: x.param_type, node.params))
-        return SubBody(
-            None,
-            [
-                Symbol(
-                    node.name,
-                    FunctionType(param_types, node.return_type),
-                    CName(self.class_name),
+        function_symbol = next(filter(lambda x: x.name == node.name, o.sym), None)
+        # Generate code cho parameters
+        for param in node.params:
+            self.visit(param, SubBody(o.frame, o.sym))
+        
+        # Generate code cho function call (nếu cần)
+        if function_symbol:
+            class_name = function_symbol.value.value
+            self.emit.print_out(
+                self.emit.emit_invoke_static(
+                    f"{class_name}/{node.name}", function_symbol.type, o.frame
                 )
-            ]
-            + o.sym,
-        )
+            )
+            return_type = function_symbol.type.return_type
+        else:
+            return_type = node.return_type  # fallback
+
+        return "", return_type
 
     def visit_param(self, node: "Param", o: Any = None):
         idx = o.frame.get_new_index()
@@ -139,22 +144,23 @@ class CodeGenerator(ASTVisitor):
     # Type system
 
     def visit_int_type(self, node: "IntType", o: Any = None):
-        return self.emit.emit_push_iconst(node.value, o.frame), IntType()
+        return IntType()
 
     def visit_float_type(self, node: "FloatType", o: Any = None):
-        return self.emit.emit_push_fconst(node.value, o.frame), FloatType()
+        return FloatType()
 
     def visit_bool_type(self, node: "BoolType", o: Any = None):
-        return self.emit.emit_push_const(node.value, o.frame), BoolType()
+        return BoolType()
 
     def visit_string_type(self, node: "StringType", o: Any = None):
-        return self.emit.emit_push_const(node.value, o.frame), StringType()
+        return StringType()
 
     def visit_void_type(self, node: "VoidType", o: Any = None):
-        pass
+        return VoidType()
 
     def visit_array_type(self, node: "ArrayType", o: Any = None):
-        pass
+        element_type = self.visit(node.element_type, o)
+        return ArrayType(element_type, node.size if hasattr(node, 'size') else 0)
 
     # Statements
 
@@ -275,21 +281,60 @@ class CodeGenerator(ASTVisitor):
         
         return o
 
-    def visit_for_stmt(self, node: "ForStmt", o: Any = None):
-        pass
+    def visit_for_stmt(self, node: "ForStmt", o: Any):
+        frame = o.frame
+        sym = o.sym
+
+        frame.enter_loop()
+        frame.enter_scope(False)
+
+        # Generate labels
+        start_label = frame.get_new_label()
+        continue_label = frame.get_continue_label()
+        break_label = frame.get_break_label()
+
+        # Emit start label
+        self.emit.print_out(self.emit.emit_label(start_label))
+
+         # Evaluate iterable expression and leave it on stack
+        iterable_code, iterable_type = self.visit(node.iterable, Access(frame, sym, False))
+        self.emit.print_out(iterable_code)
+        
+        # Initialize loop variable from iterable
+        loop_var_assignment = Assignment(IdLValue(node.variable), node.iterable)
+        self.visit(loop_var_assignment, SubBody(frame, sym))
+
+        # jump to break_label if False
+        self.emit.print_out(self.emit.emit_if_false(break_label, frame))
+
+        # Generate code for loop body
+        self.visit(node.body, SubBody(frame, sym))
+
+        # Put continue_label
+        self.emit.print_out(self.emit.emit_label(continue_label))
+        
+        # Jump back to start with all case
+        self.emit.print_out(self.emit.emit_goto(start_label, frame))
+
+        # Put break_label
+        self.emit.print_out(self.emit.emit_label(break_label))
+        
+        frame.exit_scope()
+        frame.exit_loop()
+
+        return o
 
     def visit_return_stmt(self, node: "ReturnStmt", o: Any = None):
         frame = o.frame
-        code = ""
-
+    
         if node.expr:
-            expr_code, expr_type = self.visit(node.expr, o)
-            code += expr_code
-            code += self.emit.emit_return(expr_type, frame)
+            expr_code, expr_type = self.visit(node.expr, Access(frame, o.sym, False))
+            self.emit.print_out(expr_code)
+            self.emit.print_out(self.emit.emit_return(expr_type, frame))
         else:
-            code += self.emit.emit_return(VoidType(), frame)
-
-        return code, None
+            self.emit.print_out(self.emit.emit_return(VoidType(), frame))
+        
+        return o
 
     def visit_break_stmt(self, node: "BreakStmt", o: Any = None):
         self.emit.print_out(self.emit.emit_goto(o.frame.get_break_label(), o.frame))
@@ -308,13 +353,20 @@ class CodeGenerator(ASTVisitor):
         frame = o.frame
         sym = o.sym
         
+        # Enter new scope
         frame.enter_scope(False)
-        
+        self.emit.print_out(self.emit.emit_label(frame.get_start_label()))
+
+        # Visit all statements inside the block
         for stmt in node.statements:
             self.visit(stmt, SubBody(frame, sym))
-            
+
+        # Emit end label for the block
+        self.emit.print_out(self.emit.emit_label(frame.get_end_label()))
+
+        # Exit scope
         frame.exit_scope()
-        
+
         return o
         
 
@@ -390,8 +442,11 @@ class CodeGenerator(ASTVisitor):
             
         elif op == ">>":
             rt = IntType()
-            pass
-            
+            opc = "ishr\n"
+            frame.pop()      # shift amount
+            frame.pop()      # value
+            frame.push(IntType())  # push kết quả
+                        
         elif op in ['==', '!=', '<', '<=', '>', '>=']:
             opc = self.emit.emit_rel_op(op, rt, frame)
             rt = BoolType()
@@ -401,6 +456,7 @@ class CodeGenerator(ASTVisitor):
             if op == '&&':
                 false_label = frame.get_new_label()
                 end_label = frame.get_new_label()
+                code = ""
 
                 # left operand
                 code += left_code
@@ -493,12 +549,11 @@ class CodeGenerator(ASTVisitor):
 
     def visit_array_access(self, node: "ArrayAccess", o: Any = None):
         frame = o.frame
-
+        sym = o.sym
         # Generate code for array and index
-        array_code, array_typ = self.visit(node.array, o)
-        index_code, index_typ = self.visit(node.index, o)
+        array_code, array_typ = self.visit(node.array, Access(frame, sym, False))
+        index_code, index_typ = self.visit(node.index, Access(frame, sym, False))
 
-        # kiểm tra array phải là ArrayType
         ele_type = array_typ.eleType
 
         if o.is_left:
