@@ -20,22 +20,160 @@ class CodeGenerator(ASTVisitor):
     def __init__(self):
         self.class_name = "HLang"
         self.emit = Emitter(self.class_name + ".j")
+        self.current_frame: Optional[Frame] = None
+    
+    def generate_method(self, node: "FuncDecl", o: SubBody = None):
+        frame = o.frame
+        old_frame = self.current_frame
+        self.current_frame = frame
+
+        is_init, is_main = node.name == "<init>", node.name == "main"
+
+        if is_main:
+            param_types, return_type = [ArrayType(StringType(), 0)], VoidType()
+        else:
+            param_types = [p.param_type for p in node.params]
+            return_type = node.return_type
+
+        method_type = FunctionType(param_types, return_type)
+        self.emit.print_out(self.emit.emit_method(node.name, method_type, not is_init))
+
+        frame.enter_scope(is_proc=True)
+        start_lbl, end_lbl = frame.get_start_label(), frame.get_end_label()
+
+        if is_init:
+            idx_this = frame.get_new_index()
+            self.emit.print_out(
+                self.emit.emit_var(idx_this, "this", ClassType(self.class_name), start_lbl, end_lbl)
+            )
+        elif is_main:
+            args_idx = frame.get_new_index()
+            self.emit.print_out(
+                self.emit.emit_var(
+                    args_idx, "args", ArrayType(StringType(), 0), start_lbl, end_lbl
+                )
+            )
+
+        else:
+            for prm in node.params:
+                o = self.visit(prm, o)
+
+        self.emit.print_out(self.emit.emit_label(start_lbl, frame))
+
+        if is_init:
+            self.emit.print_out(self.emit.emit_read_var("this", ClassType(self.class_name), idx_this, frame))
+            self.emit.print_out(self.emit.emit_invoke_special(frame))
+
+        for stmt in node.body:
+            o = self.visit(stmt, o)
+
+        if isinstance(return_type, VoidType):
+            self.emit.print_out(self.emit.emit_return(VoidType(), frame))
+
+        self.emit.print_out(self.emit.emit_label(end_lbl, frame))
+        self.emit.print_out(self.emit.emit_end_method(frame))
+        frame.exit_scope()
+        
+        self.current_frame = old_frame
+        
+    def _infer_type(self, node, sym_table):
+
+        def _lookup_identifier(id_node):
+            sym = next((s for s in sym_table if s.name == id_node.name), None)
+            if not sym:
+                raise IllegalOperandException(id_node.name)
+            return sym.type
+
+        match node:
+            case IntegerLiteral():
+                return IntType()
+            case FloatLiteral():
+                return FloatType()
+            case BooleanLiteral():
+                return BoolType()
+            case StringLiteral():
+                return StringType()
+            case ArrayLiteral():
+                # Lấy danh sách phần tử, có thể lưu trong .elements hoặc .value
+                elems = getattr(node, "elements", None) or getattr(node, "value", None)
+                if not elems:
+                    raise IllegalOperandException("Cannot infer type of empty array literal")
+
+                first = elems[0]
+                if isinstance(first, Identifier):
+                    elem_type = _lookup_identifier(first)
+                else:
+                    elem_type = self._infer_type_from_literal(first, sym_table)
+
+                return ArrayType(elem_type, len(elems))
+
+            case Identifier():
+                return _lookup_identifier(node)
+
+            case ArrayAccess():
+                arr_type = (
+                    _lookup_identifier(node.array)
+                    if isinstance(node.array, Identifier)
+                    else self._infer_type_from_literal(node.array, sym_table)
+                )
+                if not isinstance(arr_type, ArrayType):
+                    raise IllegalOperandException("Cannot index into non-array")
+                return arr_type.element_type
+
+            case _:
+                # fallback: gọi visit nhưng dùng frame đặc biệt chỉ để lấy type
+                _, t = self.visit(node, Access(Frame("<infer>", VoidType()), sym_table))
+                return t
 
     def visit_program(self, node: "Program", o: Any = None):
         self.emit.print_out(self.emit.emit_prolog(self.class_name, "java/lang/Object"))
+        symbols = list(IO_SYMBOL_LIST)
+        self.global_inits = []
+        
+        # Case 1: Handle const and variable
+        env = SubBody(None, symbols)
+        for decl in node.const_decls:
+            if isinstance(decl, (ConstDecl, VarDecl)):
+                env = self.visit(decl, env)
+        symbols = env.sym
+        
+        # Case 2: Handle function declaration
+        for func in filter(lambda acc: isinstance(acc, FuncDecl), node.func_decls):
+            function_type = FunctionType([p.param_type for p in func.params], func.return_type)
+            symbols.append(Symbol(func.name, function_type, CName(self.class_name)))
+        global_env = SubBody(None, symbols)
+        
+        # Case 3: Generate <clinit>
+        if self.global_inits:
+            self._gen_clinit(symbols)
 
-        global_env = reduce(
-            lambda acc, cur: self.visit(cur, acc),
-            node.func_decls,
-            SubBody(None, IO_SYMBOL_LIST),
-        )
+        # Case 4: Code
+        for func in node.func_decls:
+            if isinstance(func, FuncDecl):
+                self.visit(func, global_env)
 
-        self.generate_method(
-            FuncDecl("<init>", [], VoidType(), []),
-            SubBody(Frame("<init>", VoidType()), []),
-        )
+        # Constructor
+        constructor_decl = FuncDecl("<init>", [], VoidType(), [])
+        self.generate_method(constructor_decl, SubBody(Frame("<init>", VoidType()), []))
+
         self.emit.emit_epilog()
+    
+    def _gen_clinit(self, symbols):
+        frame = Frame("<clinit>", VoidType())
+        out = self.emit.print_out
 
+        out(".method public static <clinit>()V\n")
+        out("Label0:\n")
+
+        for name, value, typ in self.global_inits:
+            rc, _ = self.visit(value, Access(frame, symbols))
+            out(rc)
+            putstatic_code = self.emit.emit_put_static(f"{self.class_name}/{name}", typ, frame)
+            out(putstatic_code if putstatic_code.endswith("\n") else putstatic_code + "\n")
+
+        out("\treturn\nLabel1:\n")
+        out(".limit stack 10\n.limit locals 0\n.end method\n")
+        
     def generate_method(self, node: "FuncDecl", o: SubBody = None):
         frame = o.frame
 
@@ -99,47 +237,57 @@ class CodeGenerator(ASTVisitor):
         self.emit.print_out(self.emit.emit_end_method(frame))
 
         frame.exit_scope()
+    
+    def gframe(self, o: Any):
+        if isinstance(o, (Access, SubBody)) and getattr(o, "frame", None) is not None:
+            return o.frame
+        if self.current_frame is not None:
+            return self.current_frame
+        raise IllegalRuntimeException("Frame is not available")
+
+    def gsym(self, o: Any):
+        if isinstance(o, (Access, SubBody)):
+            return getattr(o, "sym", [])
+        return []
 
     def visit_const_decl(self, node: "ConstDecl", o: Any = None):
-        self.emit.print_out(self.emit.emit_attribute(node.name, node.type_annotation, True, node.value))
-        return SubBody(o.frame if o else None, [Symbol(node.name, node.type_annotation, CName(self.class_name))] + (o.sym if o else []))
+        symbols = self.gsym(o)
+        const_type = self._infer_type(node.value, symbols)
+        
+        decl = self.emit.emit_attribute(node.name, const_type, is_final=True, value=None)
+        self.emit.print_out(decl)
+        
+        # Add into symbol table
+        symbols.append(Symbol(node.name, const_type, CName(self.class_name)))
+        
+        self.global_inits = getattr(self, "global_inis", [])
+        self.global_inits.append(node.name, node.value, const_type)
+        return SubBody(getattr(o, "frame", None), symbols)
 
     def visit_func_decl(self, node: "FuncDecl", o: SubBody = None):
-        function_symbol = next(filter(lambda x: x.name == node.name, o.sym), None)
-        # Generate code cho parameters
-        for param in node.params:
-            self.visit(param, SubBody(o.frame, o.sym))
+        func_frame = Frame(node.name, node.return_type)
+        self.generate_method(node, SubBody(func_frame, o.sym))
         
-        # Generate code cho function call (nếu cần)
-        if function_symbol:
-            class_name = function_symbol.value.value
-            self.emit.print_out(
-                self.emit.emit_invoke_static(
-                    f"{class_name}/{node.name}", function_symbol.type, o.frame
-                )
-            )
-            return_type = function_symbol.type.return_type
-        else:
-            return_type = node.return_type  # fallback
-
-        return "", return_type
+        # Take the param lists
+        param_types = [param.param_type for param in node.params]
+        func_symbol = Symbol(
+            node.name,
+            FunctionType(param_types, node.return_type),
+            CName(self.class_name),
+        )
+        return SubBody(None, [func_symbol] + o.sym)
 
     def visit_param(self, node: "Param", o: Any = None):
-        idx = o.frame.get_new_index()
-        self.emit.print_out(
-            self.emit.emit_var(
-                idx,
-                node.name,
-                node.param_type,
-                o.frame.get_start_label(),
-                o.frame.get_end_label(),
-            )
+        frame = self.gframe(o)
+        index = frame.get_new_index()
+        
+        var_decl = self.emit.emit_var(
+            index, node.name, node.param_type, frame.get_start_label(), frame.get_end_label()
         )
-
-        return SubBody(
-            o.frame,
-            [Symbol(node.name, node.param_type, Index(idx))] + o.sym,
-        )
+        self.emit.print_out(var_decl)
+        
+        param_symbol = Symbol(node.name, node.param_type, Index(index))
+        return SubBody(frame, [param_symbol] + o.sym)
 
     # Type system
 
@@ -159,56 +307,141 @@ class CodeGenerator(ASTVisitor):
         return VoidType()
 
     def visit_array_type(self, node: "ArrayType", o: Any = None):
-        element_type = self.visit(node.element_type, o)
-        return ArrayType(element_type, node.size if hasattr(node, 'size') else 0)
+        return ArrayType()
 
     # Statements
 
     def visit_var_decl(self, node: "VarDecl", o: SubBody = None):
-        idx = o.frame.get_new_index()
-        self.emit.print_out(
-            self.emit.emit_var(
-                idx,
-                node.name,
-                node.type_annotation,
-                o.frame.get_start_label(),
-                o.frame.get_end_label(),
-            )
-        )
+        frame = self.gframe(o)
+        symbols = self.gsym(o)
+        
+        if node.type_annotation:
+            typ = node.type_annotation
+        else:
+            if node.value is None:
+                raise IllegalOperandException(f"Cannot infer type for variable '{node.name}' without initializer")
+        
+            def check_type(expr):
+                if isinstance(expr, IntegerLiteral):
+                    return IntType()
+                if isinstance(expr, FloatLiteral):
+                    return FloatType()
+                if isinstance(expr, BooleanLiteral):
+                    return BoolType()
+                if isinstance(expr, StringLiteral):
+                    return StringType()
+                if isinstance(expr, ArrayLiteral):
+                    elements = getattr(expr, "elements", None) or getattr(expr, "value", None)
+                    if not elements:
+                        raise IllegalOperandException("Cannot infer type of empty array literal")
 
-        if node.value is not None:
-            self.visit(
-                Assignment(IdLValue(node.name), node.value),
-                SubBody(
-                    o.frame,
-                    [Symbol(node.name, node.type_annotation, Index(idx))] + o.sym,
-                ),
-            )
-        return SubBody(
-            o.frame,
-            [Symbol(node.name, node.type_annotation, Index(idx))] + o.sym,
-        )
+                    first = elements[0]
+                    if isinstance(first, Identifier):
+                        symbol = next((sym.type for sym in symbols if sym.name == first.name), None)
+                        element_type = symbol or self.visit(first, Access(Frame("<infer>", VoidType()), symbols))[1]
+                    else:
+                        element_type = check_type(first)
+                    
+                    return ArrayType(element_type, len(elements))
+                
+                if isinstance(expr, Identifier):
+                    symbol = next((sym for sym in symbols if sym.name == expr.name), None)
+                    if not symbol:
+                        raise IllegalOperandException(expr.name)
+                    return symbol.type
+                if isinstance(expr, ArrayAccess):
+                    temp = None
+                    if isinstance(expr.array, Identifier):
+                        symbol = next((sym for sym in symbols if sym.name == expr.array.name), None)
+                        if not symbol:
+                            raise IllegalOperandException(expr.array.name)
+                        temp = symbol.type()
+                    else:
+                        temp = check_type(expr.array)
+                    
+                    if not isinstance(temp, ArrayType):
+                        raise IllegalOperandException("Cannot index the non-array type")
+                    return temp.element_type
+                _, t = self.visit(expr, Access(frame, symbols))
+                
+                return t
+            var_type = check_type(node.value)
+        index = frame.get_new_index()
+        var_decl = self.emit.emit_var(index, node.name, var_type, frame.get_start_label(), frame.get_end_label())
+        self.emit.print_out(var_decl)
+
+        new_symbols = [Symbol(node.name, var_type, Index(index))] + symbols
+        if node.value:
+            if isinstance(node.value, ArrayLiteral):
+                code, temp = self.visit(node.value, Access(frame, new_symbols))
+                self.emit.print_out(code)
+                self.emit.print_out(self.emit.emit_write_var(node.name, temp, index, frame))
+            else:
+                self.visit(
+                    Assignment(IdLValue(node.name), node.value),
+                    SubBody(frame, new_symbols),
+                )
+
+        return SubBody(frame, new_symbols)
 
     def visit_assignment(self, node: "Assignment", o: SubBody = None):
-        rc, rt = self.visit(node.value, Access(o.frame, o.sym))
-        self.emit.print_out(rc)
-        lc, lt = self.visit(node.lvalue, Access(o.frame, o.sym))
-        self.emit.print_out(lc)
+        frame = self.gframe(o)
+        symbol = self.gsym(o)
+
+        # Case 1: Assignment the array's component
+        if isinstance(node.lvalue, ArrayAccessLValue):
+            arr_code, arr_type = self.visit(node.lvalue.array, Access(frame, symbols))
+            idx_code, idx_type = self.visit(node.lvalue.index, Access(frame, symbols))
+            rhs_code, rhs_type = self.visit(node.value, Access(frame, symbols))
+
+            if isinstance(rhs_type, ArrayType):
+                desc = self.emit.get_jvm_type(rhs_type)
+                rhs_code += f"\tinvokevirtual {desc}/clone()Ljava/lang/Object;\n"
+                rhs_code += f"\tcheckcast {desc}\n"
+
+            self.emit.print_out(arr_code)
+            self.emit.print_out(idx_code)
+            self.emit.print_out(rhs_code)
+
+            etype = arr_type.element_type
+            if isinstance(etype, IntType):
+                self.emit.print_out("iastore\n")
+            elif isinstance(etype, BoolType):
+                self.emit.print_out("bastore\n")
+            elif isinstance(etype, FloatType):
+                self.emit.print_out("fastore\n")
+            else:
+                self.emit.print_out("aastore\n")
+
+        # Case 2: Assignment for common variable
+        else:
+            rhs_code, rhs_type = self.visit(node.value, Access(frame, symbols))
+
+            if isinstance(rhs_type, ArrayType):
+                desc = self.emit.get_jvm_type(rhs_type)
+                rhs_code += f"\tinvokevirtual {desc}/clone()Ljava/lang/Object;\n"
+                rhs_code += f"\tcheckcast {desc}\n"
+
+            self.emit.print_out(rhs_code)
+
+            lhs_code, _ = self.visit(node.lvalue, Access(frame, symbols))
+            self.emit.print_out(lhs_code)
+
         return o
 
     def visit_if_stmt(self, node: "IfStmt", o: Any = None):
-        frame = o.frame
-        sym = o.sym
+        frame = self.gframe(o)
+        symbols = self.gsym(o)
         
         end_label = frame.get_new_label()
-        false_label = frame.get_new_label()
+        else_label = frame.get_new_label()
         
         # Generate code for the condition expr
-        cond_code, cond_type = self.visit(node.condition, Access(frame, sym, False))
+        cond_code, cond_type = self.visit(node.condition, Access(frame, symbols, False))
         self.emit.print_out(cond_code)
         
-        # Jump to false_label if false
-        self.emit.print_out(self.emit.emit_if_false(false_label, frame))
+        # Jump to else_label if false
+        self.emit.print_out(self.emit.emit_if_false(else_label, frame))
         
         # Generate code for then_stmt
         self.visit(node.then_stmt, o)
@@ -216,42 +449,31 @@ class CodeGenerator(ASTVisitor):
         # Jump to end_label with all case
         self.emit.print_out(self.emit.emit_goto(end_label, frame))
         
-        # Put false_label
-        self.emit.print_out(self.emit.emit_label(false_label, frame))
+        # Jump to else elif label
+        self.emit.print_out(self.emit.emit_label(else_label, frame))
         
-        ## Handle else_if
-        if node.elif_branches:
-            for (elif_cond, elif_block) in node.elif_branches:
-                next_false_label = frame.get_new_label()
-                
-                # Generate code for the elif condition expr
-                ec, et = self.visit(elif_cond, Access(frame, sym, False))
-                self.emit.print_out(ec)
-                
-                # Jump to next_false_label if False
-                self.emit.print_out(self.emit.emit_if_false(next_false_label, frame))
-                
-                # Generate code for elif 
-                self.visit(elif_block, o)
+        if getattr(node, "elif_branches", None):
+            for cond, body in node.elif_branches:
+                next_label = frame.get_new_label()
+                cond_code, _ = self.visit(cond, Access(frame, symbols))
+                self.emit.print_out(cond_code)
+                self.emit.print_out(self.emit.emit_if_false(next_label, frame))
+                self.visit(body, o)
                 self.emit.print_out(self.emit.emit_goto(end_label, frame))
-                
-                # Put next_false_label
-                self.emit.print_out(self.emit.emit_label(next_false_label, frame))
+                self.emit.print_out(self.emit.emit_label(next_label, frame))
         
+        # Generate code for else_stmt
         if node.else_stmt:
-            # Generate code for else_stmt
             self.visit(node.else_stmt, o)
-        
+            
         # Put end_label
         self.emit.print_out(self.emit.emit_label(end_label, frame))
 
         return o
             
-        
-    
     def visit_while_stmt(self, node: "WhileStmt", o: Any = None):
-        frame = o.frame
-        sym = o.sym
+        frame = self.gframe(o)
+        sym = self.gsym(o)
 
         # Generate labels
         frame.enter_loop()
@@ -269,7 +491,7 @@ class CodeGenerator(ASTVisitor):
         self.emit.print_out(self.emit.emit_if_false(break_label, frame))
         
         # Generate code for body
-        self.visit(node.body, o)
+        self.visit(node.body, SubBody(frame, sym))
         
         # Jump to continue_label with all cases
         self.emit.print_out(self.emit.emit_goto(continue_label, frame))
@@ -278,57 +500,92 @@ class CodeGenerator(ASTVisitor):
         self.emit.print_out(self.emit.emit_label(break_label, frame))
 
         frame.exit_loop()
-        
         return o
 
     def visit_for_stmt(self, node: "ForStmt", o: Any):
-        frame = o.frame
-        sym = o.sym
+        frame = self.gframe(o)
+        sym = self.gsym(o)
 
-        frame.enter_loop()
-        frame.enter_scope(False)
+        full_code = ""
 
-        # Generate labels
+        # 1. Collection
+        col_code, col_type = self.visit(node.iterable, Access(frame, sym))
+        full_code += col_code
+
+        arr_tmp_idx = frame.get_new_index()
+        arr_tmp_name = f"__arr_for_{arr_tmp_idx}"
+        full_code += self.emit.emit_var(arr_tmp_idx, arr_tmp_name, col_type, frame.get_start_label(), frame.get_end_label())
+        full_code += self.emit.emit_write_var(arr_tmp_name, col_type, arr_tmp_idx, frame)
+
+        # 2. Create index = 0
+        idx_tmp_idx = frame.get_new_index()
+        idx_tmp_name = f"__idx_for_{idx_tmp_idx}"
+        full_code += self.emit.emit_var(idx_tmp_idx, idx_tmp_name, IntType(), frame.get_start_label(), frame.get_end_label())
+        full_code += self.emit.emit_push_iconst(0, frame)
+        full_code += self.emit.emit_write_var(idx_tmp_name, IntType(), idx_tmp_idx, frame)
+
+        # 3. Generate label break/continue
         start_label = frame.get_new_label()
-        continue_label = frame.get_continue_label()
-        break_label = frame.get_break_label()
+        end_label = frame.get_new_label()
+        continue_target_label = frame.get_new_label()
 
-        # Emit start label
-        self.emit.print_out(self.emit.emit_label(start_label))
+        prev_break = getattr(frame, "_break_label", None)
+        prev_continue = getattr(frame, "_continue_label", None)
+        frame._break_label = end_label
+        frame._continue_label = continue_target_label
 
-         # Evaluate iterable expression and leave it on stack
-        iterable_code, iterable_type = self.visit(node.iterable, Access(frame, sym, False))
-        self.emit.print_out(iterable_code)
-        
-        # Initialize loop variable from iterable
-        loop_var_assignment = Assignment(IdLValue(node.variable), node.iterable)
-        self.visit(loop_var_assignment, SubBody(frame, sym))
+        # 4. Loop
+        full_code += self.emit.emit_label(start_label, frame)
+        full_code += self.emit.emit_read_var(idx_tmp_name, IntType(), idx_tmp_idx, frame)
+        full_code += self.emit.emit_read_var(arr_tmp_name, col_type, arr_tmp_idx, frame)
+        full_code += "arraylength\n"
+        full_code += f"if_icmpge Label{end_label}\n"
 
-        # jump to break_label if False
-        self.emit.print_out(self.emit.emit_if_false(break_label, frame))
+        # 5. Take element
+        full_code += self.emit.emit_read_var(arr_tmp_name, col_type, arr_tmp_idx, frame)
+        full_code += self.emit.emit_read_var(idx_tmp_name, IntType(), idx_tmp_idx, frame)
 
-        # Generate code for loop body
-        self.visit(node.body, SubBody(frame, sym))
+        elem_type = col_type.element_type
+        if isinstance(elem_type, (IntType, BoolType)):
+            full_code += "iaload\n"
+        elif isinstance(elem_type, FloatType):
+            full_code += "faload\n"
+        else:
+            full_code += "aaload\n"
 
-        # Put continue_label
-        self.emit.print_out(self.emit.emit_label(continue_label))
-        
-        # Jump back to start with all case
-        self.emit.print_out(self.emit.emit_goto(start_label, frame))
+        loop_var_name = node.variable
+        loop_var_idx = frame.get_new_index()
+        full_code += self.emit.emit_var(loop_var_idx, loop_var_name, elem_type, frame.get_start_label(), frame.get_end_label())
+        full_code += self.emit.emit_write_var(loop_var_name, elem_type, loop_var_idx, frame)
 
-        # Put break_label
-        self.emit.print_out(self.emit.emit_label(break_label))
-        
-        frame.exit_scope()
-        frame.exit_loop()
+        body_sym = [Symbol(loop_var_name, elem_type, Index(loop_var_idx))] + sym
+
+        self.emit.print_out(full_code)
+
+        # Visit body of loop
+        self.visit(node.body, SubBody(frame, body_sym))
+
+        # Update index
+        cont_code = ""
+        cont_code += self.emit.emit_label(continue_target_label, frame)
+        cont_code += f"iinc {idx_tmp_idx} 1\n"
+        cont_code += self.emit.emit_goto(start_label, frame)
+        cont_code += self.emit.emit_label(end_label, frame)
+
+        self.emit.print_out(cont_code)
+
+        # Restore
+        frame._break_label = prev_break
+        frame._continue_label = prev_continue
 
         return o
 
     def visit_return_stmt(self, node: "ReturnStmt", o: Any = None):
-        frame = o.frame
-    
-        if node.expr:
-            expr_code, expr_type = self.visit(node.expr, Access(frame, o.sym, False))
+        frame = self.gframe(o)
+        symbols = self.gsym(o)
+        
+        if node.value:
+            expr_code, expr_type = self.visit(node.value, Access(frame, symbols, False))
             self.emit.print_out(expr_code)
             self.emit.print_out(self.emit.emit_return(expr_type, frame))
         else:
@@ -337,219 +594,290 @@ class CodeGenerator(ASTVisitor):
         return o
 
     def visit_break_stmt(self, node: "BreakStmt", o: Any = None):
-        self.emit.print_out(self.emit.emit_goto(o.frame.get_break_label(), o.frame))
-        return o
+        frame = self.gframe(o)
+        break_label = frame.get_break_label()
 
-    def visit_continue_stmt(self, node: "ContinueStmt", o: Any = None):
-        self.emit.print_out(self.emit.emit_goto(o.frame.get_continue_label(), o.frame))
-        return o
+        if break_label is None:
+            raise IllegalRuntimeException("Break not in loop")
 
-    def visit_expr_stmt(self, node: "ExprStmt", o: SubBody = None):
-        code, typ = self.visit(node.expr, Access(o.frame, o.sym))
+        code = self.emit.emit_goto(break_label, frame)
         self.emit.print_out(code)
         return o
 
+    def visit_continue_stmt(self, node: "ContinueStmt", o: Any = None):
+        frame = self.gframe(o)
+        continue_label = frame.get_break_label()
+
+        if continue_label is None:
+            raise IllegalRuntimeException("Continue not in loop")
+
+        code = self.emit.emit_goto(continue_label, frame)
+        self.emit.print_out(code)
+        return o
+
+    def visit_expr_stmt(self, node: "ExprStmt", o: SubBody = None):
+        frame = self.gframe(o)
+        symbols = self.gsym(o)
+        code, typ = self.visit(node.expr, Access(frame, symbols))
+        full_code = code
+        
+        if not isinstance(typ, VoidType):
+            full_code += self.emit.emit_pop(frame)
+
+        self.emit.print_out(full_code)
+        return o
+
     def visit_block_stmt(self, node: "BlockStmt", o: Any = None):
-        frame = o.frame
-        sym = o.sym
+        frame = self.gframe(o)
+        symbols = self.gsym(o)
         
         # Enter new scope
         frame.enter_scope(False)
-        self.emit.print_out(self.emit.emit_label(frame.get_start_label()))
+        
+        full_code = ""
+        full_code += self.emit.emit_label(frame.get_start_label(), frame)
 
         # Visit all statements inside the block
+        in_env = SubBody(frame, symbols[:])
         for stmt in node.statements:
-            self.visit(stmt, SubBody(frame, sym))
+            # self.visit(stmt, SubBody(frame, in_env))
+            self.visit(stmt, in_env)
 
         # Emit end label for the block
-        self.emit.print_out(self.emit.emit_label(frame.get_end_label()))
+        full_code += self.emit.emit_label(frame.get_end_label(), frame)
 
         # Exit scope
         frame.exit_scope()
-
-        return o
-        
+        self.emit.print_out(full_code)
+        return SubBody(frame, symbols)
 
     # Left-values
 
     def visit_id_lvalue(self, node: "IdLValue", o: Access = None):
-        sym = next(
-            filter(lambda x: x.name == node.name, o.sym),
-            False,
-        )
+        frame = self.gframe(o)
+        sym = next((s for s in o.sym if s.name == node.name), None)
+        if not sym:
+            raise IllegalOperandException(node.name)
 
-        if type(sym.value) is Index:
-            code = self.emit.emit_write_var(
-                sym.name, sym.type, sym.value.value, o.frame
-            )
-
-        return code, sym.type
+        if isinstance(sym.value, Index):
+            return self.emit.emit_write_var(sym.name, sym.type, sym.value.value, frame), sym.type
+        elif isinstance(sym.value, CName):
+            return self.emit.emit_put_static(f"{self.class_name}/{sym.name}", sym.type, frame), sym.type
+        else:
+            raise IllegalOperandException(node.name)
 
     def visit_array_access_lvalue(self, node: "ArrayAccessLValue", o: Any = None):
-        frame = o.frame
-        sym = o.sym
+        frame = self.gframe(o)
+        sym = self.gsym(o)
 
         arr_code, arr_type = self.visit(node.array, Access(frame, sym, False))
 
         idx_code, idx_type = self.visit(node.index, Access(frame, sym, False))
 
-    
+        elem_type = arr_type.element_type if isinstance(arr_type, ArrayType) else arr_type
         code = arr_code
         code += idx_code
-        code += self.emit.emit_array_cell(arr_type, is_left=True, frame=frame)
+        code += self.emit.emit_aload(elem_type, frame)
 
-        return code, arr_type.ele_type
+        return code, elem_type
 
 
     # Expressions
+    # def _jvm_array_signature(self, arr_type):
+    #     if isinstance(arr_type, ArrayType):
+    #         return "[" + self._jvm_array_signature(arr_type.element_type)
+    #     elif isinstance(arr_type, IntType):
+    #         return "I"
+    #     elif isinstance(arr_type, FloatType):
+    #         return "F"
+    #     elif isinstance(arr_type, BoolType):
+    #         return "Z"
+    #     elif isinstance(arr_type, StringType):
+    #         return "Ljava/lang/String;"
+    #     else:
+    #         raise IllegalOperandException(f"Unsupported array element type: {arr_type}")
 
     def visit_binary_op(self, node: "BinaryOp", o: Any = None):
-        frame = o.frame
-        sym = o.sym
-        
-        # Get operators
+        frame = self.gframe(o)
+        sym = self.gsym(o)
         op = node.operator
         
-        # Generate code for left and right operands
-        left_code, left_type = self.visit(node.left, Access(frame, sym, False))
-        right_code, right_type = self.visit(node.right, Access(frame, sym, False))
-        
-        if type(left_type) is type(right_type):
-            rt = left_type
-        elif isinstance(left_type, IntType) and isinstance(right_type, FloatType):
+        if op == ">>":
+            left_code, left_type = self.visit(node.left, Access(frame, sym))
+            function_name = ""
+            existing_args = []
+
+            if isinstance(node.right, Identifier):
+                function_name = node.right.name
+                existing_args = []
+            elif isinstance(node.right, FunctionCall):
+                function_name = node.right.function.name
+                existing_args = node.right.args
+            else:
+                raise IllegalOperandException(
+                    f"Right operand of '>>' must be a function name or call, not {type(node.right)}"
+                )
+
+            function_symbol = next((s for s in sym if s.name == function_name), None)
+            if not function_symbol or not isinstance(function_symbol.type, FunctionType):
+                raise IllegalOperandException(f"'{function_name}' is not a function.")
+
+            # build code
+            code = left_code
+            for arg in existing_args:
+                arg_code, _ = self.visit(arg, Access(frame, sym))
+                code += arg_code
+            code += self.emit.emit_invoke_static(
+                f"{self.class_name}/{function_name}", function_symbol.type, frame
+            )
+            return code, function_symbol.type.return_type
+
+        # boolean short-circuit &&, ||
+        if op in ["&&", "||"]:
+            left_code, left_type = self.visit(node.left, Access(frame, sym))
+            label_check = frame.get_new_label()
+            label_false = frame.get_new_label()
+            label_end = frame.get_new_label()
+
+            code = left_code
+            if op == "&&":
+                code += self.emit.emit_if_false(label_false, frame)
+                right_code, _ = self.visit(node.right, Access(frame, sym))
+                code += right_code
+                code += self.emit.emit_if_false(label_false, frame)
+                code += self.emit.emit_push_iconst(1, frame)
+                code += self.emit.emit_goto(label_end, frame)
+            else:  # op == "||"
+                code += self.emit.emit_if_false(label_check, frame)
+                code += self.emit.emit_push_iconst(1, frame)
+                code += self.emit.emit_goto(label_end, frame)
+                code += self.emit.emit_label(label_check, frame)
+                right_code, _ = self.visit(node.right, Access(frame, sym))
+                code += right_code
+                code += self.emit.emit_if_false(label_false, frame)
+                code += self.emit.emit_push_iconst(1, frame)
+                code += self.emit.emit_goto(label_end, frame)
+
+            code += self.emit.emit_label(label_false, frame)
+            code += self.emit.emit_push_iconst(0, frame)
+            code += self.emit.emit_label(label_end, frame)
+            return code, BoolType()
+
+        # normal binary ops
+        left_code, left_type = self.visit(node.left, Access(frame, sym))
+        right_code, right_type = self.visit(node.right, Access(frame, sym))
+
+        # string concatenation
+        if op == '+' and (isinstance(left_type, StringType) or isinstance(right_type, StringType)):
+            def _to_string_code(code_str, in_type):
+                if isinstance(in_type, StringType):
+                    return code_str
+                elif isinstance(in_type, IntType):
+                    return code_str + "invokestatic io/int2str(I)Ljava/lang/String;\n"
+                elif isinstance(in_type, FloatType):
+                    return code_str + "invokestatic io/float2str(F)Ljava/lang/String;\n"
+                elif isinstance(in_type, BoolType):
+                    return code_str + "invokestatic io/bool2str(Z)Ljava/lang/String;\n"
+                return code_str
+
+            str_left_code = _to_string_code(left_code, left_type)
+            str_right_code = _to_string_code(right_code, right_type)
+
+            return str_left_code + str_right_code + self.emit.emit_concat(frame), StringType()
+
+        # type promotion
+        result_type = left_type
+        if isinstance(left_type, IntType) and isinstance(right_type, FloatType):
             left_code += self.emit.emit_i2f(frame)
-            rt = FloatType()
+            result_type = FloatType()
         elif isinstance(left_type, FloatType) and isinstance(right_type, IntType):
             right_code += self.emit.emit_i2f(frame)
-            rt = FloatType()
-        
+            result_type = FloatType()
+        elif isinstance(left_type, FloatType) and isinstance(right_type, FloatType):
+            result_type = FloatType()
+
+        full_code = left_code + right_code
+
         if op in ['+', '-']:
-            opc = self.emit.emit_add_op(op, rt, frame)
-        
-        elif op == '*':
-            opc = self.emit.emit_mul_op(op, rt, frame)
-        
-        elif op == '/':
-            if isinstance(rt, IntType):
-                left_code += self.emit.emit_i2f(frame)
-                right_code += self.emit.emit_i2f(frame)
-                rt = FloatType()
-            opc = self.emit.emit_mul_op(op, rt, frame)
-            
+            return full_code + self.emit.emit_add_op(op, result_type, frame), result_type
+        elif op in ['*', '/']:
+            return full_code + self.emit.emit_mul_op(op, result_type, frame), result_type
         elif op == '%':
-            opc = self.emit.emit_mod(frame)
-            rt = IntType()
-            
-        elif op == ">>":
-            rt = IntType()
-            opc = "ishr\n"
-            frame.pop()      # shift amount
-            frame.pop()      # value
-            frame.push(IntType())  # push kết quả
-                        
+            return full_code + self.emit.emit_mod(frame), IntType()
         elif op in ['==', '!=', '<', '<=', '>', '>=']:
-            opc = self.emit.emit_rel_op(op, rt, frame)
-            rt = BoolType()
+            return full_code + self.emit.emit_relational_op(op, result_type, frame), BoolType()
 
-        elif op in ['&&', '||']:
-            rt = BoolType()
-            if op == '&&':
-                false_label = frame.get_new_label()
-                end_label = frame.get_new_label()
-                code = ""
+        raise IllegalOperandException(f"Unsupported operator: {op}")
 
-                # left operand
-                code += left_code
-                code += self.emit.emit_if_false(false_label, frame)
-
-                # right operand
-                code += right_code
-                code += self.emit.emit_if_false(false_label, frame)
-
-                # All is True
-                code += self.emit.emit_push_iconst(1, frame)
-                code += self.emit.emit_goto(end_label, frame)
-
-                # One if False
-                code += self.emit.emit_label(false_label, frame)
-                code += self.emit.emit_push_iconst(0, frame)
-
-                # End
-                code += self.emit.emit_label(end_label, frame)
-                return code, rt
-            
-            else:
-                true_label = frame.get_new_label()
-                end_label = frame.get_new_label()
-                code = ""
-
-                # left operand
-                code += left_code
-                code += self.emit.emit_if_true(true_label, frame)
-
-
-                code += right_code
-                code += self.emit.emit_if_true(true_label, frame)
-
-                # Both false, push 0
-                code += self.emit.emit_push_iconst(0, frame)
-                code += self.emit.emit_goto(end_label, frame)
-
-                # True case, push 1
-                code += self.emit.emit_label(true_label, frame)
-                code += self.emit.emit_push_iconst(1, frame)
-
-                # End
-                code += self.emit.emit_label(end_label, frame)
-                return code, rt
-        
-        code = left_code + right_code + opc
-        return code, rt
-
-    def visit_unary_op(self, node: "UnaryOp", o: Any = None):
-        frame = o.frame
-        opc, opt = self.visit(node.operand, o)
+    def visit_unary_op(self, node: "UnaryOp", o):
+        frame = self.gframe(o)
+        sym = self.gsym(o)
+        expr_code, expr_type = self.visit(node.operand, Access(frame, sym))
         op = node.operator
 
-        if op == "!": 
-            code = opc + self.emit.emit_not(opt, frame)
-            rt = opt
+        self.emit.print_out(expr_code)
 
-        elif op == "-":
-            code = opc + self.emit.emit_neg_op(opt, frame)
-            rt = opt
+        if op == "-":
+            self.emit.print_out(self.emit.emit_neg(expr_type, frame))
+            return "", expr_type
 
         elif op == "+":
-            code = opc
-            rt = opt
+            return "", expr_type
+
+        elif op == "!":
+            label_true = frame.get_new_label()
+            label_end = frame.get_new_label()
+
+            self.emit.print_out(f"ifeq Label{label_true}\n")
+            self.emit.print_out("iconst_0\n")
+            self.emit.print_out(f"goto Label{label_end}\n")
+            self.emit.print_out(f"Label{label_true}:\n")
+            self.emit.print_out("iconst_1\n")
+            self.emit.print_out(f"Label{label_end}:\n")
+            return "", BoolType()
 
         else:
-            code = opc
-            rt = opt
-
-        return code, rt
+            raise IllegalOperandException(f"Unsupported unary operator: {op}")
 
 
     def visit_function_call(self, node: "FunctionCall", o: Access = None):
+        frame = self.gframe(o)
+        sym = self.gsym(o)
+        
         function_name = node.function.name
-        function_symbol = next(filter(lambda x: x.name == function_name, o.sym), False)
-        class_name = function_symbol.value.value
-        argument_codes = []
+        if function_name == "len":
+            if len(node.args) != 1:
+                raise IllegalOperandException("len function requires exactly one argument")
+
+            arg_code, arg_type = self.visit(node.args[0], Access(frame, sym))
+            self.emit.print_out(arg_code)
+
+            if not isinstance(arg_type, ArrayType):
+                raise IllegalOperandException("len expects array argument")
+
+            self.emit.print_out("arraylength\n")
+            return "", IntType()
+        function_symbol = next(filter(lambda x: x.name == function_name, sym), False)
+        if not function_symbol:
+            function_symbol = next(filter(lambda x: x.name == function_name, IO_SYMBOL_LIST), False)
+        if not function_symbol:
+            raise IllegalOperandException(function_name)
+        
+        class_name = function_symbol.value.value if isinstance(function_symbol.value, CName) else self.class_name
         for argument in node.args:
             ac, at = self.visit(argument, Access(o.frame, o.sym))
-            argument_codes += [ac]
+            self.emit.print_out(ac)
 
-        return (
-            "".join(argument_codes)
-            + self.emit.emit_invoke_static(
-                class_name + "/" + function_name, function_symbol.type, o.frame
-            ),
-            VoidType(),
+        self.emit.print_out(
+            self.emit.emit_invoke_static(class_name + "/" + function_name, function_symbol.type, frame)
         )
 
+        ret_type = getattr(function_symbol.type, "return_type", VoidType())
+        return "", ret_type
+
     def visit_array_access(self, node: "ArrayAccess", o: Any = None):
-        frame = o.frame
-        sym = o.sym
+        frame = self.gframe(o)
+        sym = self.gsym(o)
         # Generate code for array and index
         array_code, array_typ = self.visit(node.array, Access(frame, sym, False))
         index_code, index_typ = self.visit(node.index, Access(frame, sym, False))
@@ -565,58 +893,89 @@ class CodeGenerator(ASTVisitor):
             return code, ele_type
 
     def visit_array_literal(self, node: "ArrayLiteral", o: Any = None):
-        element_code = ""
-        element_types = []
+        frame = self.gframe(o)
+        sym = self.gsym(o)
+        
+        elements = getattr(node, "elements", None) or getattr(node, "value", [])
+        array_size = len(elements)
 
-        for elem in node.elements:
-            ec, et = self.visit(elem, o)
-            element_code += ec
-            element_types.append(et)
+        if array_size == 0:
+            raise IllegalOperandException("Cannot infer type from empty array literal")
 
-        element_type = element_types[0]
-        arr_type = ArrayType(element_type, len(node.elements))
+        _, first_elem_type = self.visit(elements[0], Access(frame, sym))
+        array_type = ArrayType(first_elem_type, array_size)
 
         code = ""
-        code += self.emit.emit_push_const(len(node.elements), o.frame)
-        code += self.emit.emit_new_array(element_type)
+        code += self.emit.emit_push_iconst(array_size, frame)
 
-        for i, elem in enumerate(node.elements):
-            ec, _ = self.visit(elem, o)
-            code += self.emit.emit_dup(o.frame)
-            code += self.emit.emit_push_iconst(i, o.frame)
-            code += ec
-            code += self.emit.emit_astore(element_type, o.frame)
+        # Create array
+        if isinstance(first_elem_type, IntType):
+            code += self.emit.emit_new_array("int")
+        elif isinstance(first_elem_type, BoolType):
+            code += self.emit.emit_new_array("boolean")
+        elif isinstance(first_elem_type, FloatType):
+            code += self.emit.emit_new_array("float")
+        elif isinstance(first_elem_type, StringType):
+            code += "anewarray java/lang/String\n"
+        elif isinstance(first_elem_type, ArrayType):
+            descriptor = self.emit.get_jvm_type(first_elem_type)
+            code += f"anewarray {descriptor}\n"
+        else:
+            raise IllegalOperandException(f"Unsupported array element type: {first_elem_type}")
 
-        return code, arr_type
+        # Assign elements
+        for idx, elem in enumerate(elements):
+            code += "dup\n"
+            code += self.emit.emit_push_iconst(idx, frame)
+
+            elem_code, elem_type = self.visit(elem, Access(frame, sym))
+            code += elem_code
+
+            if isinstance(elem_type, IntType):
+                code += "iastore\n"
+            elif isinstance(elem_type, BoolType):
+                code += "bastore\n"
+            elif isinstance(elem_type, FloatType):
+                code += "fastore\n"
+            elif isinstance(elem_type, (StringType, ArrayType)):
+                code += "aastore\n"
+            else:
+                raise IllegalOperandException(f"Unsupported element type for array store: {elem_type}")
+
+        return code, array_type
 
 
     def visit_identifier(self, node: "Identifier", o: Any = None):
-        sym = next(filter(lambda x: x.name == node.name, o.sym), None)
-        if o.is_left:
-            if isinstance(sym.value, Index):
-                code = self.emit.emit_write_var(sym.name, sym.type, sym.value.value, o.frame)
-            
-            elif isinstance(sym.value, CName):
-                code = self.emit.emit_put_static(sym.value.value + "." + sym.name, sym.mtype, o.frame) 
-        else:
-            if type(sym.value) is Index:
-                code = self.emit.emit_read_var(sym.name, sym.type, sym.value.value, o.frame)
-            else:
-                 code = self.emit.emit_get_static(sym.value.value + "." + sym.name, sym.mtype, o.frame)
+        frame = self.gframe(o)
+        sym = next((s for s in self.gsym(o) if s.name == node.name), None)
+        if not sym:
+            raise IllegalOperandException(f"Undeclared identifier: {node.name}")
         
-        return code, sym.type
+        if isinstance(sym.value, Index):
+            code = self.emit.emit_read_var(sym.name, sym.type, sym.value.value, frame)
+            return code, sym.type
+
+        if isinstance(sym.value, CName):
+            code = self.emit.emit_get_static(f"{self.class_name}/{sym.name}", sym.type, frame)
+            return code, sym.type
+
+        raise IllegalOperandException(f"Unsupported identifier binding: {node.name}")
                 
 
     # Literals
 
     def visit_integer_literal(self, node: "IntegerLiteral", o: Access = None):
-        return self.emit.emit_push_iconst(node.value, o.frame), IntType()
+        return self.emit.emit_push_iconst(node.value, self.gframe(o)), IntType()
 
     def visit_float_literal(self, node: "FloatLiteral", o: Any = None):
-        return self.emit.emit_push_fconst(node.value, o.frame), FloatType()
+        return self.emit.emit_push_fconst(node.value, self.gframe(o)), FloatType()
 
     def visit_boolean_literal(self, node: "BooleanLiteral", o: Any = None):
-        return self.emit.emit_push_iconst(node.value, o.frame), BoolType()
+        return self.emit.emit_push_iconst(node.value, self.gframe(o)), BoolType()
 
     def visit_string_literal(self, node: "StringLiteral", o: Any = None):
-        return self.emit.emit_push_const(node.value, o.frame), StringType()
+        frame = self.gframe(o)
+        return (
+            self.emit.emit_push_const('"' + node.value + '"', StringType(), frame),
+            StringType(),
+        )
