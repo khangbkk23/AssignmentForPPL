@@ -24,24 +24,81 @@ def test_001():
     result = CodeGenerator().generate_and_run(ast)
     assert result == expected
 
-# def test_002():
-#     ast = Program(
-#         [], 
-#         [FuncDecl("main", [], VoidType(), [ExprStmt(FunctionCall(Identifier("print"), [IntegerLiteral(42)]))])]
-#     )
-#     expected = "42"
-#     result = CodeGenerator().generate_and_run(ast)
-#     assert result == expected
+def test_002():
+    ast = Program(
+        [],
+        [
+            FuncDecl(
+                "main",
+                [],
+                VoidType(),
+                [
+                    VarDecl(
+                        Identifier("i"),
+                        IntType(),
+                        BinaryOp("/", IntegerLiteral(3), IntegerLiteral(2))
+                    ),
+                    ExprStmt(
+                        FunctionCall(
+                            Identifier("print"),
+                            [
+                                FunctionCall(
+                                    Identifier("int2str"),
+                                    [Identifier("i")]
+                                )
+                            ]
+                        )
+                    )
+                ]
+            )
+        ]
+    )
+    expected = "1"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
 
-# def test_003():
-#     ast = Program(
-#         [], 
-#         [FuncDecl("main", [], VoidType(), [ExprStmt(FunctionCall(Identifier("print"), [FloatLiteral(3.14)]))])]
-#     )
-#     expected = "3.14"
-#     result = CodeGenerator().generate_and_run(ast)
-#     assert result == expected
-
+def test_simple_addition():
+    ast = Program(
+        [],
+        [
+            FuncDecl(
+                "main",
+                [],
+                VoidType(),
+                [
+                    VarDecl(
+                        Identifier("a"),
+                        IntType(),
+                        IntegerLiteral(5)
+                    ),
+                    VarDecl(
+                        Identifier("b"),
+                        IntType(),
+                        IntegerLiteral(3)
+                    ),
+                    VarDecl(
+                        Identifier("sum"),
+                        IntType(),
+                        BinaryOp("+", Identifier("a"), Identifier("b"))
+                    ),
+                    ExprStmt(
+                        FunctionCall(
+                            Identifier("print"),
+                            [
+                                FunctionCall(
+                                    Identifier("int2str"),
+                                    [Identifier("sum")]
+                                )
+                            ]
+                        )
+                    )
+                ]
+            )
+        ]
+    )
+    expected = "8"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
 # def test_004():
 #     ast = Program(
 #         [], 

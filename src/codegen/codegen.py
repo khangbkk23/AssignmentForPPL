@@ -75,7 +75,12 @@ class CodeGenerator(ASTVisitor):
         frame.exit_scope()
         
         self.current_frame = old_frame
-        
+    def get_name_string(self, name_obj):
+        """Convert name to string, handling both Identifier objects and strings"""
+        if hasattr(name_obj, 'name'):
+            return name_obj.name
+        return str(name_obj)
+    
     def _infer_type(self, node, sym_table):
 
         def _lookup_identifier(id_node):
@@ -166,9 +171,10 @@ class CodeGenerator(ASTVisitor):
         out("Label0:\n")
 
         for name, value, typ in self.global_inits:
+            name_str = self.get_name_string(name)
             rc, _ = self.visit(value, Access(frame, symbols))
             out(rc)
-            putstatic_code = self.emit.emit_put_static(f"{self.class_name}/{name}", typ, frame)
+            putstatic_code = self.emit.emit_put_static(f"{self.class_name}/{name_str}", typ, frame)
             out(putstatic_code if putstatic_code.endswith("\n") else putstatic_code + "\n")
 
         out("\treturn\nLabel1:\n")
@@ -254,24 +260,27 @@ class CodeGenerator(ASTVisitor):
         symbols = self.gsym(o)
         const_type = self._infer_type(node.value, symbols)
         
-        decl = self.emit.emit_attribute(node.name, const_type, is_final=True, value=None)
+        const_name = self.get_name_string(node.name)
+        
+        decl = self.emit.emit_attribute(const_name, const_type, is_final=True, value=None)
         self.emit.print_out(decl)
         
         # Add into symbol table
-        symbols.append(Symbol(node.name, const_type, CName(self.class_name)))
+        symbols.append(Symbol(const_name, const_type, CName(self.class_name)))
         
         self.global_inits = getattr(self, "global_inis", [])
-        self.global_inits.append(node.name, node.value, const_type)
+        self.global_inits.append((node.name, node.value, const_type))
         return SubBody(getattr(o, "frame", None), symbols)
 
     def visit_func_decl(self, node: "FuncDecl", o: SubBody = None):
-        func_frame = Frame(node.name, node.return_type)
+        func_name = self.get_name_string(node.name)
+        func_frame = Frame(func_name, node.return_type)
         self.generate_method(node, SubBody(func_frame, o.sym))
         
         # Take the param lists
         param_types = [param.param_type for param in node.params]
         func_symbol = Symbol(
-            node.name,
+            func_name,
             FunctionType(param_types, node.return_type),
             CName(self.class_name),
         )
@@ -279,14 +288,16 @@ class CodeGenerator(ASTVisitor):
 
     def visit_param(self, node: "Param", o: Any = None):
         frame = self.gframe(o)
+        
+        param_name = self.get_name_string(node.name)
         index = frame.get_new_index()
         
         var_decl = self.emit.emit_var(
-            index, node.name, node.param_type, frame.get_start_label(), frame.get_end_label()
+            index, param_name, node.param_type, frame.get_start_label(), frame.get_end_label()
         )
         self.emit.print_out(var_decl)
         
-        param_symbol = Symbol(node.name, node.param_type, Index(index))
+        param_symbol = Symbol(param_name, node.param_type, Index(index))
         return SubBody(frame, [param_symbol] + o.sym)
 
     # Type system
@@ -315,11 +326,12 @@ class CodeGenerator(ASTVisitor):
         frame = self.gframe(o)
         symbols = self.gsym(o)
         
+        var_name = self.get_name_string(node.name)
         if node.type_annotation:
             typ = node.type_annotation
         else:
             if node.value is None:
-                raise IllegalOperandException(f"Cannot infer type for variable '{node.name}' without initializer")
+                raise IllegalOperandException(f"Cannot infer type for variable '{var_name}' without initializer")
         
             def check_type(expr):
                 if isinstance(expr, IntegerLiteral):
@@ -365,28 +377,25 @@ class CodeGenerator(ASTVisitor):
                 _, t = self.visit(expr, Access(frame, symbols))
                 
                 return t
-            var_type = check_type(node.value)
+            typ = check_type(node.value)
         index = frame.get_new_index()
-        var_decl = self.emit.emit_var(index, node.name, var_type, frame.get_start_label(), frame.get_end_label())
+        var_decl = self.emit.emit_var(index, var_name, typ, frame.get_start_label(), frame.get_end_label())
         self.emit.print_out(var_decl)
 
-        new_symbols = [Symbol(node.name, var_type, Index(index))] + symbols
+        new_symbols = [Symbol(var_name, typ, Index(index))] + symbols
         if node.value:
             if isinstance(node.value, ArrayLiteral):
                 code, temp = self.visit(node.value, Access(frame, new_symbols))
                 self.emit.print_out(code)
-                self.emit.print_out(self.emit.emit_write_var(node.name, temp, index, frame))
+                self.emit.print_out(self.emit.emit_write_var(var_name, temp, index, frame))
             else:
-                self.visit(
-                    Assignment(IdLValue(node.name), node.value),
-                    SubBody(frame, new_symbols),
-                )
+                self.visit(Assignment(IdLValue(var_name), node.value), SubBody(frame, new_symbols))
 
         return SubBody(frame, new_symbols)
 
     def visit_assignment(self, node: "Assignment", o: SubBody = None):
         frame = self.gframe(o)
-        symbol = self.gsym(o)
+        symbols = self.gsym(o)
 
         # Case 1: Assignment the array's component
         if isinstance(node.lvalue, ArrayAccessLValue):
@@ -655,23 +664,23 @@ class CodeGenerator(ASTVisitor):
 
     def visit_id_lvalue(self, node: "IdLValue", o: Access = None):
         frame = self.gframe(o)
-        sym = next((s for s in o.sym if s.name == node.name), None)
+        
+        lvalue_name = self.get_name_string(node.name)
+        sym = next((s for s in o.sym if s.name == lvalue_name), None)
         if not sym:
-            raise IllegalOperandException(node.name)
+            raise IllegalOperandException(lvalue_name)
 
         if isinstance(sym.value, Index):
             return self.emit.emit_write_var(sym.name, sym.type, sym.value.value, frame), sym.type
         elif isinstance(sym.value, CName):
             return self.emit.emit_put_static(f"{self.class_name}/{sym.name}", sym.type, frame), sym.type
         else:
-            raise IllegalOperandException(node.name)
+            raise IllegalOperandException(lvalue_name)
 
     def visit_array_access_lvalue(self, node: "ArrayAccessLValue", o: Any = None):
         frame = self.gframe(o)
         sym = self.gsym(o)
-
         arr_code, arr_type = self.visit(node.array, Access(frame, sym, False))
-
         idx_code, idx_type = self.visit(node.index, Access(frame, sym, False))
 
         elem_type = arr_type.element_type if isinstance(arr_type, ArrayType) else arr_type
@@ -683,19 +692,19 @@ class CodeGenerator(ASTVisitor):
 
 
     # Expressions
-    # def _jvm_array_signature(self, arr_type):
-    #     if isinstance(arr_type, ArrayType):
-    #         return "[" + self._jvm_array_signature(arr_type.element_type)
-    #     elif isinstance(arr_type, IntType):
-    #         return "I"
-    #     elif isinstance(arr_type, FloatType):
-    #         return "F"
-    #     elif isinstance(arr_type, BoolType):
-    #         return "Z"
-    #     elif isinstance(arr_type, StringType):
-    #         return "Ljava/lang/String;"
-    #     else:
-    #         raise IllegalOperandException(f"Unsupported array element type: {arr_type}")
+    def _jvm_array_signature(self, arr_type):
+        if isinstance(arr_type, ArrayType):
+            return "[" + self._jvm_array_signature(arr_type.element_type)
+        elif isinstance(arr_type, IntType):
+            return "I"
+        elif isinstance(arr_type, FloatType):
+            return "F"
+        elif isinstance(arr_type, BoolType):
+            return "Z"
+        elif isinstance(arr_type, StringType):
+            return "Ljava/lang/String;"
+        else:
+            raise IllegalOperandException(f"Unsupported array element type: {arr_type}")
 
     def visit_binary_op(self, node: "BinaryOp", o: Any = None):
         frame = self.gframe(o)
@@ -727,9 +736,8 @@ class CodeGenerator(ASTVisitor):
             for arg in existing_args:
                 arg_code, _ = self.visit(arg, Access(frame, sym))
                 code += arg_code
-            code += self.emit.emit_invoke_static(
-                f"{self.class_name}/{function_name}", function_symbol.type, frame
-            )
+            class_name_str = self.class_name.name if isinstance(self.class_name, Identifier) else str(self.class_name)
+            code += self.emit.emit_invoke_static( f"{class_name_str}/{function_name}", function_symbol.type, frame)
             return code, function_symbol.type.return_type
 
         # boolean short-circuit &&, ||
@@ -840,11 +848,50 @@ class CodeGenerator(ASTVisitor):
             raise IllegalOperandException(f"Unsupported unary operator: {op}")
 
 
+    # def visit_function_call(self, node: "FunctionCall", o: Access = None):
+    #     frame = self.gframe(o)
+    #     sym = self.gsym(o)
+        
+    #     function_name = node.function.name
+    #     if function_name == "len":
+    #         if len(node.args) != 1:
+    #             raise IllegalOperandException("len function requires exactly one argument")
+
+    #         arg_code, arg_type = self.visit(node.args[0], Access(frame, sym))
+    #         self.emit.print_out(arg_code)
+
+    #         if not isinstance(arg_type, ArrayType):
+    #             raise IllegalOperandException("len expects array argument")
+
+    #         self.emit.print_out("arraylength\n")
+    #         return "", IntType()
+    #     function_symbol = next(filter(lambda x: x.name == function_name, sym), False)
+    #     if not function_symbol:
+    #         function_symbol = next(filter(lambda x: x.name == function_name, IO_SYMBOL_LIST), False)
+    #     if not function_symbol:
+    #         raise IllegalOperandException(function_name)
+        
+    #     class_name = function_symbol.value.value if isinstance(function_symbol.value, CName) else self.class_name
+    #     for argument in node.args:
+    #         ac, at = self.visit(argument, Access(o.frame, o.sym))
+    #         self.emit.print_out(ac)
+
+    #     self.emit.print_out(
+    #         self.emit.emit_invoke_static(class_name + "/" + function_name, function_symbol.type, frame)
+    #     )
+
+    #     ret_type = getattr(function_symbol.type, "return_type", VoidType())
+    #     return "", ret_type
     def visit_function_call(self, node: "FunctionCall", o: Access = None):
         frame = self.gframe(o)
         sym = self.gsym(o)
-        
-        function_name = node.function.name
+
+        if isinstance(node.function, Identifier):
+            function_name = node.function.name
+        else:
+            raise IllegalOperandException(f"Unsupported function type: {type(node.function)}")
+
+        # xử lý builtin len
         if function_name == "len":
             if len(node.args) != 1:
                 raise IllegalOperandException("len function requires exactly one argument")
@@ -857,23 +904,30 @@ class CodeGenerator(ASTVisitor):
 
             self.emit.print_out("arraylength\n")
             return "", IntType()
-        function_symbol = next(filter(lambda x: x.name == function_name, sym), False)
+
+        # tìm hàm trong symbol table hoặc IO builtins
+        function_symbol = next((x for x in sym if x.name == function_name), None)
         if not function_symbol:
-            function_symbol = next(filter(lambda x: x.name == function_name, IO_SYMBOL_LIST), False)
+            function_symbol = next((x for x in IO_SYMBOL_LIST if x.name == function_name), None)
         if not function_symbol:
             raise IllegalOperandException(function_name)
-        
+
+        # class chứa hàm (static method)
         class_name = function_symbol.value.value if isinstance(function_symbol.value, CName) else self.class_name
-        for argument in node.args:
-            ac, at = self.visit(argument, Access(o.frame, o.sym))
+
+        # sinh code cho arguments
+        for arg in node.args:
+            ac, at = self.visit(arg, Access(frame, sym))
             self.emit.print_out(ac)
 
+        # invoke static
         self.emit.print_out(
-            self.emit.emit_invoke_static(class_name + "/" + function_name, function_symbol.type, frame)
+            self.emit.emit_invoke_static(f"{class_name}/{function_name}", function_symbol.type, frame)
         )
 
         ret_type = getattr(function_symbol.type, "return_type", VoidType())
         return "", ret_type
+
 
     def visit_array_access(self, node: "ArrayAccess", o: Any = None):
         frame = self.gframe(o)
