@@ -5,12 +5,26 @@
 .method public static main([Ljava/lang/String;)V
 .var 0 is args [Ljava/lang/String; from Label0 to Label1
 Label0:
-	ldc "Hello World"
+.var 1 is words [Ljava/lang/String; from Label0 to Label1
+	iconst_1
+anewarray java/lang/String
+dup
+	iconst_0
+	ldc "old"
+aastore
+	astore_1
+	aload_1
+	iconst_0
+	ldc "new"
+aastore
+	aload_1
+	iconst_0
+	aaload
 	invokestatic io/print(Ljava/lang/String;)V
 	return
 Label1:
-.limit stack 1
-.limit locals 1
+.limit stack 8
+.limit locals 2
 .end method
 
 .method public <init>()V

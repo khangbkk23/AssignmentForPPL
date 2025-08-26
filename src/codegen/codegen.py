@@ -21,9 +21,10 @@ class CodeGenerator(ASTVisitor):
         self.class_name = "HLang"
         self.emit = Emitter(self.class_name + ".j")
         self.current_frame: Optional[Frame] = None
+        self.global_inits = []
     
     def generate_method(self, node: "FuncDecl", o: SubBody = None):
-        frame = o.frame
+        frame = self.gframe(o)
         old_frame = self.current_frame
         self.current_frame = frame
 
@@ -75,6 +76,7 @@ class CodeGenerator(ASTVisitor):
         frame.exit_scope()
         
         self.current_frame = old_frame
+        
     def get_name_string(self, name_obj):
         """Convert name to string, handling both Identifier objects and strings"""
         if hasattr(name_obj, 'name'):
@@ -99,7 +101,6 @@ class CodeGenerator(ASTVisitor):
             case StringLiteral():
                 return StringType()
             case ArrayLiteral():
-                # Lấy danh sách phần tử, có thể lưu trong .elements hoặc .value
                 elems = getattr(node, "elements", None) or getattr(node, "value", None)
                 if not elems:
                     raise IllegalOperandException("Cannot infer type of empty array literal")
@@ -108,7 +109,7 @@ class CodeGenerator(ASTVisitor):
                 if isinstance(first, Identifier):
                     elem_type = _lookup_identifier(first)
                 else:
-                    elem_type = self._infer_type_from_literal(first, sym_table)
+                    elem_type = self._infer_type(first, sym_table)
 
                 return ArrayType(elem_type, len(elems))
 
@@ -179,70 +180,6 @@ class CodeGenerator(ASTVisitor):
 
         out("\treturn\nLabel1:\n")
         out(".limit stack 10\n.limit locals 0\n.end method\n")
-        
-    def generate_method(self, node: "FuncDecl", o: SubBody = None):
-        frame = o.frame
-
-        is_init = node.name == "<init>"
-        is_main = node.name == "main"
-
-        param_types = list(map(lambda x: x.param_type, node.params))
-        if is_main:
-            param_types = [ArrayType(StringType(), 0)]
-        return_type = node.return_type
-
-        self.emit.print_out(
-            self.emit.emit_method(
-                node.name, FunctionType(param_types, return_type), not is_init
-            )
-        )
-
-        frame.enter_scope(True)
-
-        from_label = frame.get_start_label()
-        to_label = frame.get_end_label()
-
-        # Generate code for parameters
-        if is_init:
-            this_idx = frame.get_new_index()
-
-            self.emit.print_out(
-                self.emit.emit_var(
-                    this_idx, "this", ClassType(self.class_name), from_label, to_label
-                )
-            )
-        elif is_main:
-            args_idx = frame.get_new_index()
-            self.emit.print_out(
-                self.emit.emit_var(
-                    args_idx, "args", ArrayType(StringType(), 0), from_label, to_label
-                )
-            )
-        else:
-            o = reduce(lambda acc, cur: self.visit(cur, acc), node.params, o)
-
-        self.emit.print_out(self.emit.emit_label(from_label, frame))
-
-        # Generate code for body
-
-        if is_init:
-            self.emit.print_out(
-                self.emit.emit_read_var(
-                    "this", ClassType(self.class_name), this_idx, frame
-                )
-            )
-            self.emit.print_out(self.emit.emit_invoke_special(frame))
-
-        o = reduce(lambda acc, cur: self.visit(cur, acc), node.body, o)
-
-        if type(return_type) is VoidType:
-            self.emit.print_out(self.emit.emit_return(VoidType(), frame))
-
-        self.emit.print_out(self.emit.emit_label(to_label, frame))
-
-        self.emit.print_out(self.emit.emit_end_method(frame))
-
-        frame.exit_scope()
     
     def gframe(self, o: Any):
         if isinstance(o, (Access, SubBody)) and getattr(o, "frame", None) is not None:
@@ -268,7 +205,7 @@ class CodeGenerator(ASTVisitor):
         # Add into symbol table
         symbols.append(Symbol(const_name, const_type, CName(self.class_name)))
         
-        self.global_inits = getattr(self, "global_inis", [])
+        self.global_inits = getattr(self, "global_inits", [])
         self.global_inits.append((node.name, node.value, const_type))
         return SubBody(getattr(o, "frame", None), symbols)
 
@@ -322,76 +259,133 @@ class CodeGenerator(ASTVisitor):
 
     # Statements
 
+    # def visit_var_decl(self, node: "VarDecl", o: SubBody = None):
+    #     frame = self.gframe(o)
+    #     symbols = self.gsym(o)
+        
+    #     var_name = self.get_name_string(node.name).strip()
+    #     if node.type_annotation:
+    #         typ = node.type_annotation
+    #     else:
+    #         if node.value is None:
+    #             raise IllegalOperandException(f"Cannot infer type for variable '{var_name}' without initializer")
+        
+    #         def check_type(expr):
+    #             if isinstance(expr, IntegerLiteral):
+    #                 return IntType()
+    #             if isinstance(expr, FloatLiteral):
+    #                 return FloatType()
+    #             if isinstance(expr, BooleanLiteral):
+    #                 return BoolType()
+    #             if isinstance(expr, StringLiteral):
+    #                 return StringType()
+    #             if isinstance(expr, ArrayLiteral):
+    #                 elements = getattr(expr, "elements", None) or getattr(expr, "value", None)
+    #                 if not elements:
+    #                     raise IllegalOperandException("Cannot infer type of empty array literal")
+
+    #                 first = elements[0]
+    #                 if isinstance(first, Identifier):
+    #                     symbol = next((sym.type for sym in symbols if sym.name == first.name), None)
+    #                     element_type = symbol or self.visit(first, Access(Frame("<infer>", VoidType()), symbols))[1]
+    #                 else:
+    #                     element_type = check_type(first)
+                    
+    #                 return ArrayType(element_type, len(elements))
+                
+    #             if isinstance(expr, Identifier):
+    #                 symbol = next((sym for sym in symbols if sym.name == expr.name), None)
+    #                 if not symbol:
+    #                     raise IllegalOperandException(expr.name)
+    #                 return symbol.type
+    #             if isinstance(expr, ArrayAccess):
+    #                 temp = None
+    #                 if isinstance(expr.array, Identifier):
+    #                     symbol = next((sym for sym in symbols if sym.name == expr.array.name), None)
+    #                     if not symbol:
+    #                         raise IllegalOperandException(expr.array.name)
+    #                     temp = symbol.type()
+    #                 else:
+    #                     temp = check_type(expr.array)
+                    
+    #                 if not isinstance(temp, ArrayType):
+    #                     raise IllegalOperandException("Cannot index the non-array type")
+    #                 return temp.element_type
+    #             _, t = self.visit(expr, Access(frame, symbols))
+                
+    #             return t
+    #         typ = check_type(node.value)
+    #     index = frame.get_new_index()
+    #     var_decl = self.emit.emit_var(index, var_name, typ, frame.get_start_label(), frame.get_end_label())
+    #     self.emit.print_out(var_decl)
+
+    #     new_symbols = [Symbol(var_name, typ, Index(index))] + symbols
+    #     if node.value:
+    #         if isinstance(node.value, ArrayLiteral):
+    #             code, temp = self.visit(node.value, Access(frame, new_symbols))
+    #             self.emit.print_out(code)
+    #             self.emit.print_out(self.emit.emit_write_var(var_name, temp, index, frame))
+    #         else:
+    #             self.visit(Assignment(IdLValue(var_name), node.value), SubBody(frame, new_symbols))
+
+    #     return SubBody(frame, new_symbols)
     def visit_var_decl(self, node: "VarDecl", o: SubBody = None):
         frame = self.gframe(o)
         symbols = self.gsym(o)
-        
+
         var_name = self.get_name_string(node.name)
+
+        # determine var type
         if node.type_annotation:
-            typ = node.type_annotation
+            var_type = node.type_annotation
         else:
             if node.value is None:
                 raise IllegalOperandException(f"Cannot infer type for variable '{var_name}' without initializer")
-        
-            def check_type(expr):
-                if isinstance(expr, IntegerLiteral):
-                    return IntType()
-                if isinstance(expr, FloatLiteral):
-                    return FloatType()
-                if isinstance(expr, BooleanLiteral):
-                    return BoolType()
-                if isinstance(expr, StringLiteral):
-                    return StringType()
-                if isinstance(expr, ArrayLiteral):
-                    elements = getattr(expr, "elements", None) or getattr(expr, "value", None)
-                    if not elements:
-                        raise IllegalOperandException("Cannot infer type of empty array literal")
+            var_type = self._infer_type(node.value, symbols)
 
-                    first = elements[0]
-                    if isinstance(first, Identifier):
-                        symbol = next((sym.type for sym in symbols if sym.name == first.name), None)
-                        element_type = symbol or self.visit(first, Access(Frame("<infer>", VoidType()), symbols))[1]
-                    else:
-                        element_type = check_type(first)
-                    
-                    return ArrayType(element_type, len(elements))
-                
-                if isinstance(expr, Identifier):
-                    symbol = next((sym for sym in symbols if sym.name == expr.name), None)
-                    if not symbol:
-                        raise IllegalOperandException(expr.name)
-                    return symbol.type
-                if isinstance(expr, ArrayAccess):
-                    temp = None
-                    if isinstance(expr.array, Identifier):
-                        symbol = next((sym for sym in symbols if sym.name == expr.array.name), None)
-                        if not symbol:
-                            raise IllegalOperandException(expr.array.name)
-                        temp = symbol.type()
-                    else:
-                        temp = check_type(expr.array)
-                    
-                    if not isinstance(temp, ArrayType):
-                        raise IllegalOperandException("Cannot index the non-array type")
-                    return temp.element_type
-                _, t = self.visit(expr, Access(frame, symbols))
-                
-                return t
-            typ = check_type(node.value)
         index = frame.get_new_index()
-        var_decl = self.emit.emit_var(index, var_name, typ, frame.get_start_label(), frame.get_end_label())
+        var_decl = self.emit.emit_var(index, var_name, var_type, frame.get_start_label(), frame.get_end_label())
         self.emit.print_out(var_decl)
 
-        new_symbols = [Symbol(var_name, typ, Index(index))] + symbols
+        new_symbols = [Symbol(var_name, var_type, Index(index))] + symbols
+
+        # initializer handling
         if node.value:
+            # if array literal: generate array then store
             if isinstance(node.value, ArrayLiteral):
-                code, temp = self.visit(node.value, Access(frame, new_symbols))
+                code, elem_t = self.visit(node.value, Access(frame, new_symbols))
                 self.emit.print_out(code)
-                self.emit.print_out(self.emit.emit_write_var(var_name, temp, index, frame))
+                self.emit.print_out(self.emit.emit_write_var(var_name, elem_t, index, frame))
             else:
+                # reuse assignment to ensure proper load/store logic
                 self.visit(Assignment(IdLValue(var_name), node.value), SubBody(frame, new_symbols))
+        else:
+            init_code = ""
+            if isinstance(var_type, IntType) or isinstance(var_type, BoolType):
+                init_code += self.emit.emit_push_iconst(0, frame)
+            elif isinstance(var_type, FloatType):
+                init_code += self.emit.emit_push_fconst(0.0, frame)  # or fconst_0
+            elif isinstance(var_type, StringType):
+                pass
+            elif isinstance(var_type, ArrayType):
+                size = getattr(var_type, "size", 0) or 0
+                init_code += self.emit.emit_push_iconst(size, frame)
+                et = var_type.element_type
+                if isinstance(et, IntType):
+                    init_code += self.emit.emit_new_array("int")
+                elif isinstance(et, FloatType):
+                    init_code += self.emit.emit_new_array("float")
+                else:
+                    elem_internal = self.emit.get_jvm_type(et)
+                    init_code += self.emit.emit_anearray(elem_internal, frame)
+            else:
+                init_code += self.emit.emit_p(frame)
+
+            init_code += self.emit.emit_write_var(var_name, var_type, index, frame)
+            self.emit.print_out(init_code)
 
         return SubBody(frame, new_symbols)
+
 
     def visit_assignment(self, node: "Assignment", o: SubBody = None):
         frame = self.gframe(o)
@@ -615,7 +609,7 @@ class CodeGenerator(ASTVisitor):
 
     def visit_continue_stmt(self, node: "ContinueStmt", o: Any = None):
         frame = self.gframe(o)
-        continue_label = frame.get_break_label()
+        continue_label = frame.get_continue_label()
 
         if continue_label is None:
             raise IllegalRuntimeException("Continue not in loop")
@@ -793,6 +787,21 @@ class CodeGenerator(ASTVisitor):
 
             return str_left_code + str_right_code + self.emit.emit_concat(frame), StringType()
 
+        if op == '/':
+            code = ""
+            # push left then convert if needed
+            code += left_code
+            if isinstance(left_type, IntType):
+                code += self.emit.emit_i2f(frame)
+            # push right then convert if needed
+            code += right_code
+            if isinstance(right_type, IntType):
+                code += self.emit.emit_i2f(frame)
+            # emit float divide (your emitter may have a helper; use it)
+            # if your emitter uses emit_mul_op for '/' too, call with FloatType
+            code += self.emit.emit_mul_op('/', FloatType(), frame)
+            return code, FloatType()    
+        
         # type promotion
         result_type = left_type
         if isinstance(left_type, IntType) and isinstance(right_type, FloatType):
@@ -809,12 +818,20 @@ class CodeGenerator(ASTVisitor):
         if op in ['+', '-']:
             return full_code + self.emit.emit_add_op(op, result_type, frame), result_type
         elif op in ['*', '/']:
-            return full_code + self.emit.emit_mul_op(op, result_type, frame), result_type
+            if op == '*':
+                return full_code + self.emit.emit_mul_op(op, result_type, frame), result_type
+            else:
+                if not isinstance(left_type, FloatType):
+                    left_code += self.emit.emit_i2f(frame)
+                if not isinstance(right_type, FloatType):
+                    right_code += self.emit.emit_i2f(frame)
+                result_type = FloatType()
+            return left_code + right_code + self.emit.emit_mul_op(op, result_type, frame), result_type
+
         elif op == '%':
             return full_code + self.emit.emit_mod(frame), IntType()
         elif op in ['==', '!=', '<', '<=', '>', '>=']:
-            return full_code + self.emit.emit_relational_op(op, result_type, frame), BoolType()
-
+            return full_code + self.emit.emit_re_op(op, result_type, frame), BoolType()
         raise IllegalOperandException(f"Unsupported operator: {op}")
 
     def visit_unary_op(self, node: "UnaryOp", o):
@@ -826,7 +843,7 @@ class CodeGenerator(ASTVisitor):
         self.emit.print_out(expr_code)
 
         if op == "-":
-            self.emit.print_out(self.emit.emit_neg(expr_type, frame))
+            self.emit.print_out(self.emit.emit_neg_op(expr_type, frame))
             return "", expr_type
 
         elif op == "+":
@@ -847,86 +864,97 @@ class CodeGenerator(ASTVisitor):
         else:
             raise IllegalOperandException(f"Unsupported unary operator: {op}")
 
-
-    # def visit_function_call(self, node: "FunctionCall", o: Access = None):
-    #     frame = self.gframe(o)
-    #     sym = self.gsym(o)
-        
-    #     function_name = node.function.name
-    #     if function_name == "len":
-    #         if len(node.args) != 1:
-    #             raise IllegalOperandException("len function requires exactly one argument")
-
-    #         arg_code, arg_type = self.visit(node.args[0], Access(frame, sym))
-    #         self.emit.print_out(arg_code)
-
-    #         if not isinstance(arg_type, ArrayType):
-    #             raise IllegalOperandException("len expects array argument")
-
-    #         self.emit.print_out("arraylength\n")
-    #         return "", IntType()
-    #     function_symbol = next(filter(lambda x: x.name == function_name, sym), False)
-    #     if not function_symbol:
-    #         function_symbol = next(filter(lambda x: x.name == function_name, IO_SYMBOL_LIST), False)
-    #     if not function_symbol:
-    #         raise IllegalOperandException(function_name)
-        
-    #     class_name = function_symbol.value.value if isinstance(function_symbol.value, CName) else self.class_name
-    #     for argument in node.args:
-    #         ac, at = self.visit(argument, Access(o.frame, o.sym))
-    #         self.emit.print_out(ac)
-
-    #     self.emit.print_out(
-    #         self.emit.emit_invoke_static(class_name + "/" + function_name, function_symbol.type, frame)
-    #     )
-
-    #     ret_type = getattr(function_symbol.type, "return_type", VoidType())
-    #     return "", ret_type
     def visit_function_call(self, node: "FunctionCall", o: Access = None):
         frame = self.gframe(o)
         sym = self.gsym(o)
-
-        if isinstance(node.function, Identifier):
-            function_name = node.function.name
-        else:
+        if not isinstance(node.function, Identifier):
             raise IllegalOperandException(f"Unsupported function type: {type(node.function)}")
 
-        # xử lý builtin len
+        function_name = node.function.name
+
+        # builtin len (đặc biệt vì không nằm trong class io)
         if function_name == "len":
             if len(node.args) != 1:
-                raise IllegalOperandException("len function requires exactly one argument")
+                raise IllegalOperandException("len requires exactly one argument")
 
             arg_code, arg_type = self.visit(node.args[0], Access(frame, sym))
-            self.emit.print_out(arg_code)
+            if isinstance(arg_type, ArrayType):
+                code = arg_code + "arraylength\n"
+                return code, IntType()
 
-            if not isinstance(arg_type, ArrayType):
-                raise IllegalOperandException("len expects array argument")
+            elif isinstance(arg_type, StringType):
+                code = arg_code + "invokevirtual java/lang/String/length()I\n"
+                return code, IntType()
+            else:
+                raise IllegalOperandException("len expects array or string argument")
+        
+        if function_name == "print":
+            if len(node.args) != 1:
+                raise IllegalOperandException("print requires exactly one argument")
+            
+            arg_code, arg_type = self.visit(node.args[0], Access(frame, sym))
+            code = arg_code
+            
+            if isinstance(arg_type, IntType):
+                code += self.emit.emit_invoke_static(
+                    "io/int2str", 
+                    FunctionType([IntType()], StringType()),  # (I)Ljava/lang/String;
+                    frame
+                )
+            elif isinstance(arg_type, FloatType):
+                code += self.emit.emit_invoke_static(
+                    "io/float2str",
+                    FunctionType([FloatType()], StringType()),  # (F)Ljava/lang/String;
+                    frame
+                )
+            elif isinstance(arg_type, BoolType):
+                code += self.emit.emit_invoke_static(
+                    "io/bool2str",
+                    FunctionType([BoolType()], StringType()),  # (Z)Ljava/lang/String;
+                    frame
+                )
+            elif isinstance(arg_type, StringType):
+                pass
+            else:
+                raise IllegalOperandException(f"print does not support type: {type(arg_type)}")
+            
+            code += self.emit.emit_invoke_static(
+                "io/print",
+                FunctionType([StringType()], VoidType()),
+                frame
+            )
+            return code, VoidType()
 
-            self.emit.print_out("arraylength\n")
-            return "", IntType()
-
-        # tìm hàm trong symbol table hoặc IO builtins
+        # tìm trong symbol table hoặc IO builtins
         function_symbol = next((x for x in sym if x.name == function_name), None)
         if not function_symbol:
             function_symbol = next((x for x in IO_SYMBOL_LIST if x.name == function_name), None)
         if not function_symbol:
             raise IllegalOperandException(function_name)
 
-        # class chứa hàm (static method)
-        class_name = function_symbol.value.value if isinstance(function_symbol.value, CName) else self.class_name
+        # class chứa hàm
+        class_name = (
+            function_symbol.value.value
+            if isinstance(function_symbol.value, CName)
+            else self.class_name
+        )
 
-        # sinh code cho arguments
+        # sinh code cho arguments (push lên stack trước khi invoke)
+        code = ""
+        arg_types = []
         for arg in node.args:
             ac, at = self.visit(arg, Access(frame, sym))
-            self.emit.print_out(ac)
+            code += ac
+            arg_types.append(at)
 
-        # invoke static
-        self.emit.print_out(
-            self.emit.emit_invoke_static(f"{class_name}/{function_name}", function_symbol.type, frame)
+        # emit invokestatic (dùng emit_invoke_static để sinh descriptor đúng)
+        code += self.emit.emit_invoke_static(
+            f"{class_name}/{function_name}", function_symbol.type, frame
         )
 
         ret_type = getattr(function_symbol.type, "return_type", VoidType())
-        return "", ret_type
+        return code, ret_type
+
 
 
     def visit_array_access(self, node: "ArrayAccess", o: Any = None):
@@ -936,7 +964,7 @@ class CodeGenerator(ASTVisitor):
         array_code, array_typ = self.visit(node.array, Access(frame, sym, False))
         index_code, index_typ = self.visit(node.index, Access(frame, sym, False))
 
-        ele_type = array_typ.eleType
+        ele_type = array_typ.element_type
 
         if o.is_left:
             code = array_code + index_code
@@ -1001,19 +1029,26 @@ class CodeGenerator(ASTVisitor):
 
     def visit_identifier(self, node: "Identifier", o: Any = None):
         frame = self.gframe(o)
-        sym = next((s for s in self.gsym(o) if s.name == node.name), None)
+        name = self.get_name_string(node.name).strip()
+        sym = next((s for s in self.gsym(o) if s.name == name), None)
         if not sym:
-            raise IllegalOperandException(f"Undeclared identifier: {node.name}")
-        
+            raise IllegalOperandException(f"Undeclared identifier: {name}")
+
+        # Local / param
         if isinstance(sym.value, Index):
             code = self.emit.emit_read_var(sym.name, sym.type, sym.value.value, frame)
             return code, sym.type
 
+       # Global variable (static field)
         if isinstance(sym.value, CName):
-            code = self.emit.emit_get_static(f"{self.class_name}/{sym.name}", sym.type, frame)
+            code = self.emit.emit_get_static(f"{sym.value.value}/{sym.name}", sym.type, frame)
             return code, sym.type
 
-        raise IllegalOperandException(f"Unsupported identifier binding: {node.name}")
+        # Function reference
+        if isinstance(sym.type, FunctionType):
+            return "", sym.type
+        raise IllegalOperandException(f"Unsupported identifier binding: {name}")
+
                 
 
     # Literals
@@ -1025,7 +1060,10 @@ class CodeGenerator(ASTVisitor):
         return self.emit.emit_push_fconst(node.value, self.gframe(o)), FloatType()
 
     def visit_boolean_literal(self, node: "BooleanLiteral", o: Any = None):
-        return self.emit.emit_push_iconst(node.value, self.gframe(o)), BoolType()
+        frame = self.gframe(o)
+        jvm_value = 1 if node.value else 0
+        code = self.emit.emit_push_iconst(jvm_value, frame)
+        return code, BoolType()
 
     def visit_string_literal(self, node: "StringLiteral", o: Any = None):
         frame = self.gframe(o)

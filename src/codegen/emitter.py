@@ -402,7 +402,18 @@ class Emitter:
         frame.pop()
         frame.pop()
         return self.jvm.emitPUTFIELD(lexeme, self.get_jvm_type(in_))
+    
+    def emit_concat(self, frame) -> str:
+        """
+        Sinh code cho phép nối chuỗi (concat) trong JVM.
+        """
+        frame.pop()
+        frame.pop()
+        frame.push()
 
+        concat_instr = "\tinvokevirtual java/lang/String/concat(Ljava/lang/String;)Ljava/lang/String;\n"
+        return concat_instr
+    
     def emit_invoke_static(self, lexeme: str, in_, frame) -> str:
         """
         Generate code to invoke a static method.
@@ -801,6 +812,10 @@ class Emitter:
         """
         frame.push()
         return self.jvm.emitDUP()
+    def emit_anearray(self, jvm_type: str, frame):
+        """Emit JVM anewarray instruction for object type array"""
+        # jvm_type: e.g.: "java/lang/String"
+        return f"anewarray {jvm_type}\n"
 
     def emit_pop(self, frame) -> str:
         """
