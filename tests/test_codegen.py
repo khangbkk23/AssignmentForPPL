@@ -1039,6 +1039,44 @@ def test_069():
     expected = "new"
     result = CodeGenerator().generate_and_run(ast)
     assert result == expected
+
+
+def test_070():
+    """Complex pipeline operator with multiple transformations"""
+    ast = Program([], [
+        # Helper functions
+        FuncDecl("double", [Param("x", IntType())], IntType(), [
+            ReturnStmt(BinaryOp(Identifier("x"), "*", IntegerLiteral(2)))
+        ]),
+        FuncDecl("add_five", [Param("x", IntType())], IntType(), [
+            ReturnStmt(BinaryOp(Identifier("x"), "+", IntegerLiteral(5)))
+        ]),
+        
+        # Main function
+        FuncDecl("main", [], VoidType(), [
+            # Basic pipeline: 3 >> double
+            VarDecl("result1", None, 
+                    BinaryOp(IntegerLiteral(3), ">>", Identifier("double"))),
+            ExprStmt(FunctionCall(Identifier("print"), [Identifier("result1")])),
+            
+            # Chained pipeline: 2 >> double >> add_five
+            VarDecl("result2", None,
+                    BinaryOp(
+                        BinaryOp(IntegerLiteral(2), ">>", Identifier("double")),
+                        ">>", Identifier("add_five")
+                    )),
+            ExprStmt(FunctionCall(Identifier("print"), [Identifier("result2")])),
+            
+            # Pipeline with variable
+            VarDecl("num", None, IntegerLiteral(4)),
+            VarDecl("result3", None,
+                    BinaryOp(Identifier("num"), ">>", Identifier("double"))),
+            ExprStmt(FunctionCall(Identifier("print"), [Identifier("result3")]))
+        ])
+    ])
+    expected = "6\n9\n8"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
     
 def test_071():
     """2D integer array declaration and access"""
@@ -1084,7 +1122,7 @@ def test_073():
                 ArrayLiteral([FloatLiteral(1.5), FloatLiteral(2.5)]),
                 ArrayLiteral([FloatLiteral(3.5), FloatLiteral(4.5)])
             ])),
-            Assignment(ArrayAccess(ArrayAccess(Identifier("nums"), IntegerLiteral(1)), IntegerLiteral(0)), FloatLiteral(9.9)),
+            Assignment(ArrayAccessLValue(ArrayAccess(Identifier("nums"), IntegerLiteral(1)), IntegerLiteral(0)), FloatLiteral(9.9)),
             ExprStmt(FunctionCall(Identifier("print"), [ArrayAccess(ArrayAccess(Identifier("nums"), IntegerLiteral(1)), IntegerLiteral(0))]))
         ])
     ])
@@ -1119,5 +1157,408 @@ def test_075():
         ])
     ])
     expected = "1.0"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_076():
+    """Simple if statement - true condition"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("x", None, IntegerLiteral(10)),
+            IfStmt(BinaryOp(Identifier("x"), "==", IntegerLiteral(10)), 
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("equal")]))]),
+                   [], None)
+        ])
+    ])
+    expected = "equal"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_077():
+    """Simple if statement - false condition"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("x", None, IntegerLiteral(5)),
+            IfStmt(BinaryOp(Identifier("x"), "==", IntegerLiteral(10)), 
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("equal")]))]),
+                   [], None)
+        ])
+    ])
+    expected = ""
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_078():
+    """If-else statement"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("x", None, IntegerLiteral(5)),
+            IfStmt(BinaryOp(Identifier("x"), "==", IntegerLiteral(10)), 
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("equal")]))]),
+                   [],
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("not equal")]))]))
+        ])
+    ])
+    expected = "not equal"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_079():
+    """If-elif-else statement"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("score", None, IntegerLiteral(85)),
+            IfStmt(BinaryOp(Identifier("score"), ">=", IntegerLiteral(90)), 
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("A")]))]),
+                   [(BinaryOp(Identifier("score"), ">=", IntegerLiteral(80)), 
+                     BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("B")]))]))],
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("C")]))]))
+        ])
+    ])
+    expected = "B"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_080():
+    """Nested if statements with float-int type"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("x", None, IntegerLiteral(15)),
+            IfStmt(BinaryOp(Identifier("x"), ">", IntegerLiteral(10)), 
+                   BlockStmt([
+                       IfStmt(BinaryOp(Identifier("x"), "<", FloatLiteral(20)), 
+                              BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("between 10 and 20")]))]),
+                              [], None)
+                   ]),
+                   [], None)
+        ])
+    ])
+    expected = "between 10 and 20"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_081():
+    """Simple while loop"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("i", None, IntegerLiteral(0)),
+            WhileStmt(BinaryOp(Identifier("i"), "<", IntegerLiteral(3)), 
+                      BlockStmt([
+                          ExprStmt(FunctionCall(Identifier("print"), [Identifier("i")])),
+                          Assignment(IdLValue("i"), BinaryOp(Identifier("i"), "+", IntegerLiteral(1)))
+                      ]))
+        ])
+    ])
+    expected = "0\n1\n2"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_082():
+    """While loop with condition false from start"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("i", None, IntegerLiteral(5)),
+            WhileStmt(BinaryOp(Identifier("i"), "<", IntegerLiteral(3)), 
+                      ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("inside loop")])))
+        ])
+    ])
+    expected = ""
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_083():
+    """For loop with array"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("nums", None, ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3)])),
+            ForStmt("x", Identifier("nums"), 
+                    ExprStmt(FunctionCall(Identifier("print"), [Identifier("x")])))
+        ])
+    ])
+    expected = "1\n2\n3"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_084():
+    """For loop with empty array"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("nums", ArrayType(IntType(), 0), None),
+            ForStmt("x", Identifier("nums"), 
+                    ExprStmt(FunctionCall(Identifier("print"), [Identifier("x")])))
+        ])
+    ])
+    expected = ""
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_085():
+    """While loop with break"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("i", None, IntegerLiteral(0)),
+            WhileStmt(BinaryOp(Identifier("i"), "<", IntegerLiteral(10)), 
+                      BlockStmt([
+                          IfStmt(BinaryOp(Identifier("i"), "==", IntegerLiteral(3)), 
+                                 BlockStmt([BreakStmt()]), [], None),
+                          ExprStmt(FunctionCall(Identifier("print"), [Identifier("i")])),
+                          Assignment(IdLValue("i"), BinaryOp(Identifier("i"), "+", IntegerLiteral(1)))
+                      ]))
+        ])
+    ])
+    expected = "0\n1\n2"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_086():
+    """While loop with continue"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("i", None, IntegerLiteral(0)),
+            WhileStmt(BinaryOp(Identifier("i"), "<", IntegerLiteral(5)), 
+                      BlockStmt([
+                          Assignment(IdLValue("i"), BinaryOp(Identifier("i"), "+", IntegerLiteral(1))),
+                          IfStmt(BinaryOp(Identifier("i"), "==", IntegerLiteral(3)), 
+                                 BlockStmt([ContinueStmt()]), [], None),
+                          ExprStmt(FunctionCall(Identifier("print"), [Identifier("i")]))
+                      ]))
+        ])
+    ])
+    expected = "1\n2\n4\n5"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_087():
+    """Function with return value"""
+    ast = Program([], [
+        FuncDecl("add", [Param("a", IntType()), Param("b", IntType())], IntType(), [
+            ReturnStmt(BinaryOp(Identifier("a"), "+", Identifier("b")))
+        ]),
+        FuncDecl("main", [], VoidType(), [
+            ExprStmt(FunctionCall(Identifier("print"), [FunctionCall(Identifier("add"), [IntegerLiteral(5), IntegerLiteral(3)])]))
+        ])
+    ])
+    expected = "8"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_088():
+    """Function with early return"""
+    ast = Program([], [
+        FuncDecl("check", [Param("x", IntType())], StringType(), [
+            IfStmt(BinaryOp(Identifier("x"), "<", IntegerLiteral(0)),
+                   BlockStmt([ReturnStmt(StringLiteral("negative"))]), [], None),
+            ReturnStmt(StringLiteral("positive"))
+        ]),
+        FuncDecl("main", [], VoidType(), [
+            ExprStmt(FunctionCall(Identifier("print"), [FunctionCall(Identifier("check"), [IntegerLiteral(-5)])])),
+            ExprStmt(FunctionCall(Identifier("print"), [FunctionCall(Identifier("check"), [IntegerLiteral(10)])]))
+        ])
+    ])
+    expected = "negative\npositive"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_089():
+    """Block statement with local scope"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("x", None, IntegerLiteral(10)),
+            BlockStmt([
+                VarDecl("y", None, IntegerLiteral(20)),
+                ExprStmt(FunctionCall(Identifier("print"), [BinaryOp(Identifier("x"), "+", Identifier("y"))]))
+            ]),
+            ExprStmt(FunctionCall(Identifier("print"), [Identifier("x")]))
+        ])
+    ])
+    expected = "30\n10"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_090():
+    """Expression statement with side effects"""
+    ast = Program([], [
+        FuncDecl("side_effect", [], IntType(), [
+            ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("side effect")])),
+            ReturnStmt(IntegerLiteral(42))
+        ]),
+        FuncDecl("main", [], VoidType(), [
+            ExprStmt(FunctionCall(Identifier("side_effect"), [])),
+            ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("done")]))
+        ])
+    ])
+    expected = "side effect\ndone"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_091():
+    """Boolean short-circuit AND"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("a", None, BooleanLiteral(False)),
+            VarDecl("b", None, BooleanLiteral(True)),
+            ExprStmt(FunctionCall(Identifier("print"), [BinaryOp(Identifier("a"), "&&", Identifier("b"))])),
+            ExprStmt(FunctionCall(Identifier("print"), [BinaryOp(Identifier("b"), "&&", Identifier("a"))])),
+            ExprStmt(FunctionCall(Identifier("print"), [BinaryOp(Identifier("b"), "&&", Identifier("b"))]))
+        ])
+    ])
+    expected = "false\nfalse\ntrue"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_092():
+    """Boolean short-circuit OR"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("a", None, BooleanLiteral(False)),
+            VarDecl("b", None, BooleanLiteral(True)),
+            ExprStmt(FunctionCall(Identifier("print"), [BinaryOp(Identifier("a"), "||", Identifier("b"))])),
+            ExprStmt(FunctionCall(Identifier("print"), [BinaryOp(Identifier("a"), "||", Identifier("a"))])),
+            ExprStmt(FunctionCall(Identifier("print"), [BinaryOp(Identifier("b"), "||", Identifier("a"))]))
+        ])
+    ])
+    expected = "true\nfalse\ntrue"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_093():
+    """String concatenation with mixed types"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("name", None, StringLiteral("Value:")),
+            VarDecl("num", None, IntegerLiteral(42)),
+            VarDecl("flag", None, BooleanLiteral(True)),
+            ExprStmt(FunctionCall(Identifier("print"), [BinaryOp(Identifier("name"), "+", Identifier("num"))])),
+            ExprStmt(FunctionCall(Identifier("print"), [BinaryOp(StringLiteral("Flag is "), "+", Identifier("flag"))]))
+        ])
+    ])
+    expected = "Value:42\nFlag is true"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_094():
+    """Unary operators"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("x", None, IntegerLiteral(5)),
+            VarDecl("y", None, FloatLiteral(3.14)),
+            VarDecl("flag", None, BooleanLiteral(True)),
+            ExprStmt(FunctionCall(Identifier("print"), [UnaryOp("-", Identifier("x"))])),
+            ExprStmt(FunctionCall(Identifier("print"), [UnaryOp("-", Identifier("y"))])),
+            ExprStmt(FunctionCall(Identifier("print"), [UnaryOp("!", Identifier("flag"))])),
+            ExprStmt(FunctionCall(Identifier("print"), [UnaryOp("+", Identifier("x"))]))
+        ])
+    ])
+    expected = "-5\n-3.14\nfalse\n5"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_095():
+    """Complex expression with precedence"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("a", None, IntegerLiteral(2)),
+            VarDecl("b", None, IntegerLiteral(3)),
+            VarDecl("c", None, IntegerLiteral(4)),
+            # (a + b) * c - a
+            VarDecl("result", None, BinaryOp(
+                BinaryOp(BinaryOp(Identifier("a"), "+", Identifier("b")), "*", Identifier("c")), 
+                "-", 
+                Identifier("a"))),
+            ExprStmt(FunctionCall(Identifier("print"), [Identifier("result")]))
+        ])
+    ])
+    expected = "18"  # (2 + 3) * 4 - 2 = 20 - 2 = 18
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_096():
+    """Pipeline operator (>>)"""
+    ast = Program([], [
+        FuncDecl("double", [Param("x", IntType())], IntType(), [
+            ReturnStmt(BinaryOp(Identifier("x"), "*", IntegerLiteral(2)))
+        ]),
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("result", None, BinaryOp(IntegerLiteral(5), ">>", Identifier("double"))),
+            ExprStmt(FunctionCall(Identifier("print"), [Identifier("result")]))
+        ])
+    ])
+    expected = "10"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_097():
+    """Constants declaration and usage"""
+    ast = Program([
+        ConstDecl("PI", None, FloatLiteral(3.14159)),
+        ConstDecl("MAX_SIZE", None, IntegerLiteral(100))
+    ], [
+        FuncDecl("main", [], VoidType(), [
+            ExprStmt(FunctionCall(Identifier("print"), [Identifier("PI")])),
+            ExprStmt(FunctionCall(Identifier("print"), [Identifier("MAX_SIZE")]))
+        ])
+    ])
+    expected = "3.1416\n100"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_098():
+    """Len function with array and string"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("arr", None, ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3)])),
+            VarDecl("str", None, StringLiteral("hello")),
+            ExprStmt(FunctionCall(Identifier("print"), [FunctionCall(Identifier("len"), [Identifier("arr")])])),
+            ExprStmt(FunctionCall(Identifier("print"), [FunctionCall(Identifier("len"), [Identifier("str")])]))
+        ])
+    ])
+    expected = "3\n5"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_099():
+    """Nested function calls"""
+    ast = Program([], [
+        FuncDecl("add", [Param("a", IntType()), Param("b", IntType())], IntType(), [
+            ReturnStmt(BinaryOp(Identifier("a"), "+", Identifier("b")))
+        ]),
+        FuncDecl("multiply", [Param("a", IntType()), Param("b", IntType())], IntType(), [
+            ReturnStmt(BinaryOp(Identifier("a"), "*", Identifier("b")))
+        ]),
+        FuncDecl("main", [], VoidType(), [
+            # multiply(add(2, 3), add(4, 1))
+            VarDecl("result", None, FunctionCall(Identifier("multiply"), [
+                FunctionCall(Identifier("add"), [IntegerLiteral(2), IntegerLiteral(3)]),
+                FunctionCall(Identifier("add"), [IntegerLiteral(4), IntegerLiteral(1)])
+            ])),
+            ExprStmt(FunctionCall(Identifier("print"), [Identifier("result")]))
+        ])
+    ])
+    expected = "25"  # (2+3) * (4+1) = 5 * 5 = 25
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_100():
+    """Complex program with multiple features - Modified to remove factorial"""
+    ast = Program([
+        ConstDecl("LIMIT", None, IntegerLiteral(10))
+    ], [
+        FuncDecl("square", [Param("n", IntType())], IntType(), [
+            ReturnStmt(BinaryOp(Identifier("n"), "*", Identifier("n")))
+        ]),
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("numbers", None, ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2), IntegerLiteral(3), IntegerLiteral(4)])),
+            ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("Squares:")])),
+            ForStmt("num", Identifier("numbers"),
+                    BlockStmt([
+                        IfStmt(BinaryOp(Identifier("num"), "<", Identifier("LIMIT")),
+                               ExprStmt(FunctionCall(Identifier("print"),
+                                       [BinaryOp(BinaryOp(Identifier("num"), "+", StringLiteral("^2 = ")),
+                                                "+", FunctionCall(Identifier("square"), [Identifier("num")]))])),
+                               [], None)
+                    ]))
+        ])
+    ])
+    expected = "Squares:\n1^2 = 1\n2^2 = 4\n3^2 = 9\n4^2 = 16"
     result = CodeGenerator().generate_and_run(ast)
     assert result == expected

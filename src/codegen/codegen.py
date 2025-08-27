@@ -259,76 +259,6 @@ class CodeGenerator(ASTVisitor):
 
     # Statements
 
-    # def visit_var_decl(self, node: "VarDecl", o: SubBody = None):
-    #     frame = self.gframe(o)
-    #     symbols = self.gsym(o)
-        
-    #     var_name = self.get_name_string(node.name).strip()
-    #     if node.type_annotation:
-    #         typ = node.type_annotation
-    #     else:
-    #         if node.value is None:
-    #             raise IllegalOperandException(f"Cannot infer type for variable '{var_name}' without initializer")
-        
-    #         def check_type(expr):
-    #             if isinstance(expr, IntegerLiteral):
-    #                 return IntType()
-    #             if isinstance(expr, FloatLiteral):
-    #                 return FloatType()
-    #             if isinstance(expr, BooleanLiteral):
-    #                 return BoolType()
-    #             if isinstance(expr, StringLiteral):
-    #                 return StringType()
-    #             if isinstance(expr, ArrayLiteral):
-    #                 elements = getattr(expr, "elements", None) or getattr(expr, "value", None)
-    #                 if not elements:
-    #                     raise IllegalOperandException("Cannot infer type of empty array literal")
-
-    #                 first = elements[0]
-    #                 if isinstance(first, Identifier):
-    #                     symbol = next((sym.type for sym in symbols if sym.name == first.name), None)
-    #                     element_type = symbol or self.visit(first, Access(Frame("<infer>", VoidType()), symbols))[1]
-    #                 else:
-    #                     element_type = check_type(first)
-                    
-    #                 return ArrayType(element_type, len(elements))
-                
-    #             if isinstance(expr, Identifier):
-    #                 symbol = next((sym for sym in symbols if sym.name == expr.name), None)
-    #                 if not symbol:
-    #                     raise IllegalOperandException(expr.name)
-    #                 return symbol.type
-    #             if isinstance(expr, ArrayAccess):
-    #                 temp = None
-    #                 if isinstance(expr.array, Identifier):
-    #                     symbol = next((sym for sym in symbols if sym.name == expr.array.name), None)
-    #                     if not symbol:
-    #                         raise IllegalOperandException(expr.array.name)
-    #                     temp = symbol.type()
-    #                 else:
-    #                     temp = check_type(expr.array)
-                    
-    #                 if not isinstance(temp, ArrayType):
-    #                     raise IllegalOperandException("Cannot index the non-array type")
-    #                 return temp.element_type
-    #             _, t = self.visit(expr, Access(frame, symbols))
-                
-    #             return t
-    #         typ = check_type(node.value)
-    #     index = frame.get_new_index()
-    #     var_decl = self.emit.emit_var(index, var_name, typ, frame.get_start_label(), frame.get_end_label())
-    #     self.emit.print_out(var_decl)
-
-    #     new_symbols = [Symbol(var_name, typ, Index(index))] + symbols
-    #     if node.value:
-    #         if isinstance(node.value, ArrayLiteral):
-    #             code, temp = self.visit(node.value, Access(frame, new_symbols))
-    #             self.emit.print_out(code)
-    #             self.emit.print_out(self.emit.emit_write_var(var_name, temp, index, frame))
-    #         else:
-    #             self.visit(Assignment(IdLValue(var_name), node.value), SubBody(frame, new_symbols))
-
-    #     return SubBody(frame, new_symbols)
     def visit_var_decl(self, node: "VarDecl", o: SubBody = None):
         frame = self.gframe(o)
         symbols = self.gsym(o)
@@ -424,17 +354,6 @@ class CodeGenerator(ASTVisitor):
 
         # Case 2: Assignment for common variable
         else:
-            # rhs_code, rhs_type = self.visit(node.value, Access(frame, symbols))
-
-            # if isinstance(rhs_type, ArrayType):
-            #     desc = self.emit.get_jvm_type(rhs_type)
-            #     rhs_code += f"\tinvokevirtual {desc}/clone()Ljava/lang/Object;\n"
-            #     rhs_code += f"\tcheckcast {desc}\n"
-
-            # self.emit.print_out(rhs_code)
-
-            # lhs_code, _ = self.visit(node.lvalue, Access(frame, symbols))
-            # self.emit.print_out(lhs_code)
             rhs_code, rhs_type = self.visit(node.value, Access(frame, symbols))
             self.emit.print_out(rhs_code)
 
@@ -444,11 +363,10 @@ class CodeGenerator(ASTVisitor):
             if symbol is None:
                 raise IllegalOperandException(f"Undeclared variable: {var_name}")
             self.emit.print_out(self.emit.emit_write_var(var_name, symbol.type, symbol.value.value, frame))
-            print("flag called them")
 
         return o
 
-    def visit_if_stmt(self, node: "IfStmt", o: Any = None):
+    def visit_if_stmt(self, node: "IfStmt", o: Any = None): 
         frame = self.gframe(o)
         symbols = self.gsym(o)
         
@@ -649,25 +567,17 @@ class CodeGenerator(ASTVisitor):
     def visit_block_stmt(self, node: "BlockStmt", o: Any = None):
         frame = self.gframe(o)
         symbols = self.gsym(o)
-        
-        # Enter new scope
+
         frame.enter_scope(False)
         
-        full_code = ""
-        full_code += self.emit.emit_label(frame.get_start_label(), frame)
-
-        # Visit all statements inside the block
-        in_env = SubBody(frame, symbols[:])
+        block_symbols = symbols[:]
+        block_env = SubBody(frame, block_symbols)
+    
         for stmt in node.statements:
-            # self.visit(stmt, SubBody(frame, in_env))
-            self.visit(stmt, in_env)
-
-        # Emit end label for the block
-        full_code += self.emit.emit_label(frame.get_end_label(), frame)
-
-        # Exit scope
+            result = self.visit(stmt, block_env)
+            if result and hasattr(result, 'sym'):
+                block_env = result
         frame.exit_scope()
-        self.emit.print_out(full_code)
         return SubBody(frame, symbols)
 
     # Left-values
@@ -696,8 +606,7 @@ class CodeGenerator(ASTVisitor):
         elem_type = arr_type.element_type if isinstance(arr_type, ArrayType) else arr_type
         code = arr_code
         code += idx_code
-        code += self.emit.emit_aload(elem_type, frame)
-
+        # code += self.emit.emit_aload(elem_type, frame)
         return code, elem_type
 
 
