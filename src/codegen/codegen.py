@@ -78,7 +78,6 @@ class CodeGenerator(ASTVisitor):
         self.current_frame = old_frame
         
     def get_name_string(self, name_obj):
-        """Convert name to string, handling both Identifier objects and strings"""
         if hasattr(name_obj, 'name'):
             return name_obj.name
         return str(name_obj)
@@ -136,24 +135,24 @@ class CodeGenerator(ASTVisitor):
         symbols = list(IO_SYMBOL_LIST)
         self.global_inits = []
         
-        # Case 1: Handle const and variable
+        # Handle const and variable
         env = SubBody(None, symbols)
         for decl in node.const_decls:
             if isinstance(decl, (ConstDecl, VarDecl)):
                 env = self.visit(decl, env)
         symbols = env.sym
         
-        # Case 2: Handle function declaration
+        # Handle function declaration
         for func in filter(lambda acc: isinstance(acc, FuncDecl), node.func_decls):
             function_type = FunctionType([p.param_type for p in func.params], func.return_type)
             symbols.append(Symbol(func.name, function_type, CName(self.class_name)))
         global_env = SubBody(None, symbols)
         
-        # Case 3: Generate <clinit>
+        # Generate <clinit>
         if self.global_inits:
             self._gen_clinit(symbols)
 
-        # Case 4: Code
+        # Code
         for func in node.func_decls:
             if isinstance(func, FuncDecl):
                 self.visit(func, global_env)
@@ -264,8 +263,6 @@ class CodeGenerator(ASTVisitor):
         symbols = self.gsym(o)
 
         var_name = self.get_name_string(node.name)
-
-        # determine var type
         if node.type_annotation:
             var_type = node.type_annotation
         else:
@@ -279,7 +276,6 @@ class CodeGenerator(ASTVisitor):
 
         new_symbols = [Symbol(var_name, var_type, Index(index))] + symbols
 
-        # initializer handling
         if node.value:
             print("value is not None")
             if isinstance(node.value, ArrayLiteral):
@@ -327,7 +323,7 @@ class CodeGenerator(ASTVisitor):
         frame = self.gframe(o)
         symbols = self.gsym(o)
 
-        # Case 1: Assignment the array's component
+        # Assignment the array's component
         if isinstance(node.lvalue, ArrayAccessLValue):
             arr_code, arr_type = self.visit(node.lvalue.array, Access(frame, symbols))
             idx_code, idx_type = self.visit(node.lvalue.index, Access(frame, symbols))
@@ -352,12 +348,10 @@ class CodeGenerator(ASTVisitor):
             else:
                 self.emit.print_out("aastore\n")
 
-        # Case 2: Assignment for common variable
+        # Assignment for common variable
         else:
             rhs_code, rhs_type = self.visit(node.value, Access(frame, symbols))
             self.emit.print_out(rhs_code)
-
-            # Determine variable symbol
             var_name = node.lvalue.name
             symbol = next((s for s in symbols if s.name == var_name), None)
             if symbol is None:
@@ -369,44 +363,46 @@ class CodeGenerator(ASTVisitor):
     def visit_if_stmt(self, node: "IfStmt", o: Any = None): 
         frame = self.gframe(o)
         symbols = self.gsym(o)
-        
+
         end_label = frame.get_new_label()
         else_label = frame.get_new_label()
         
-        # Generate code for the condition expr
-        cond_code, cond_type = self.visit(node.condition, Access(frame, symbols, False))
+        # Generate code for condition
+        cond_code, _ = self.visit(node.condition, Access(frame, symbols, False))
         self.emit.print_out(cond_code)
-        
-        # Jump to else_label if false
         self.emit.print_out(self.emit.emit_if_false(else_label, frame))
         
-        # Generate code for then_stmt
+        # then branch
         self.visit(node.then_stmt, o)
+        # only jump if not ending with return
+        if not (isinstance(node.then_stmt, BlockStmt) and isinstance(node.then_stmt.statements[-1], ReturnStmt)):
+            self.emit.print_out(self.emit.emit_goto(end_label, frame))
         
-        # Jump to end_label with all case
-        self.emit.print_out(self.emit.emit_goto(end_label, frame))
-        
-        # Jump to else elif label
         self.emit.print_out(self.emit.emit_label(else_label, frame))
         
+        # elif branches
         if getattr(node, "elif_branches", None):
             for cond, body in node.elif_branches:
                 next_label = frame.get_new_label()
                 cond_code, _ = self.visit(cond, Access(frame, symbols))
                 self.emit.print_out(cond_code)
                 self.emit.print_out(self.emit.emit_if_false(next_label, frame))
+                
                 self.visit(body, o)
-                self.emit.print_out(self.emit.emit_goto(end_label, frame))
+                if not (isinstance(body, BlockStmt) and isinstance(body.statements[-1], ReturnStmt)):
+                    self.emit.print_out(self.emit.emit_goto(end_label, frame))
+                
                 self.emit.print_out(self.emit.emit_label(next_label, frame))
         
-        # Generate code for else_stmt
+        # else branch
         if node.else_stmt:
             self.visit(node.else_stmt, o)
-            
-        # Put end_label
+            if not (isinstance(node.else_stmt, BlockStmt) and isinstance(node.else_stmt.statements[-1], ReturnStmt)):
+                self.emit.print_out(self.emit.emit_goto(end_label, frame))
+        
         self.emit.print_out(self.emit.emit_label(end_label, frame))
-
         return o
+
             
     def visit_while_stmt(self, node: "WhileStmt", o: Any = None):
         frame = self.gframe(o)
@@ -445,7 +441,7 @@ class CodeGenerator(ASTVisitor):
 
         full_code = ""
 
-        # 1. Collection
+        # Collection
         col_code, col_type = self.visit(node.iterable, Access(frame, sym))
         full_code += col_code
 
@@ -454,14 +450,14 @@ class CodeGenerator(ASTVisitor):
         full_code += self.emit.emit_var(arr_tmp_idx, arr_tmp_name, col_type, frame.get_start_label(), frame.get_end_label())
         full_code += self.emit.emit_write_var(arr_tmp_name, col_type, arr_tmp_idx, frame)
 
-        # 2. Create index = 0
+        # Create index = 0
         idx_tmp_idx = frame.get_new_index()
         idx_tmp_name = f"__idx_for_{idx_tmp_idx}"
         full_code += self.emit.emit_var(idx_tmp_idx, idx_tmp_name, IntType(), frame.get_start_label(), frame.get_end_label())
         full_code += self.emit.emit_push_iconst(0, frame)
         full_code += self.emit.emit_write_var(idx_tmp_name, IntType(), idx_tmp_idx, frame)
 
-        # 3. Generate label break/continue
+        # Generate label break/continue
         start_label = frame.get_new_label()
         end_label = frame.get_new_label()
         continue_target_label = frame.get_new_label()
@@ -471,14 +467,14 @@ class CodeGenerator(ASTVisitor):
         frame._break_label = end_label
         frame._continue_label = continue_target_label
 
-        # 4. Loop
+        # Loop
         full_code += self.emit.emit_label(start_label, frame)
         full_code += self.emit.emit_read_var(idx_tmp_name, IntType(), idx_tmp_idx, frame)
         full_code += self.emit.emit_read_var(arr_tmp_name, col_type, arr_tmp_idx, frame)
         full_code += "arraylength\n"
         full_code += f"if_icmpge Label{end_label}\n"
 
-        # 5. Take element
+        # Take element
         full_code += self.emit.emit_read_var(arr_tmp_name, col_type, arr_tmp_idx, frame)
         full_code += self.emit.emit_read_var(idx_tmp_name, IntType(), idx_tmp_idx, frame)
 
@@ -606,7 +602,7 @@ class CodeGenerator(ASTVisitor):
         elem_type = arr_type.element_type if isinstance(arr_type, ArrayType) else arr_type
         code = arr_code
         code += idx_code
-        # code += self.emit.emit_aload(elem_type, frame)
+        code += self.emit.emit_aload(elem_type, frame)
         return code, elem_type
 
 
@@ -796,8 +792,7 @@ class CodeGenerator(ASTVisitor):
             raise IllegalOperandException(f"Unsupported function type: {type(node.function)}")
 
         function_name = node.function.name
-
-        # builtin len (đặc biệt vì không nằm trong class io)
+        
         if function_name == "len":
             if len(node.args) != 1:
                 raise IllegalOperandException("len requires exactly one argument")
@@ -850,21 +845,17 @@ class CodeGenerator(ASTVisitor):
             )
             return code, VoidType()
 
-        # tìm trong symbol table hoặc IO builtins
         function_symbol = next((x for x in sym if x.name == function_name), None)
         if not function_symbol:
             function_symbol = next((x for x in IO_SYMBOL_LIST if x.name == function_name), None)
         if not function_symbol:
             raise IllegalOperandException(function_name)
-
-        # class chứa hàm
+        
         class_name = (
             function_symbol.value.value
             if isinstance(function_symbol.value, CName)
             else self.class_name
         )
-
-        # sinh code cho arguments (push lên stack trước khi invoke)
         code = ""
         arg_types = []
         for arg in node.args:
@@ -872,7 +863,6 @@ class CodeGenerator(ASTVisitor):
             code += ac
             arg_types.append(at)
 
-        # emit invokestatic (dùng emit_invoke_static để sinh descriptor đúng)
         code += self.emit.emit_invoke_static(
             f"{class_name}/{function_name}", function_symbol.type, frame
         )
@@ -883,7 +873,7 @@ class CodeGenerator(ASTVisitor):
     def visit_array_access(self, node: "ArrayAccess", o: Any = None):
         frame = self.gframe(o)
         sym = self.gsym(o)
-        # Generate code for array and index
+
         array_code, array_typ = self.visit(node.array, Access(frame, sym, False))
         index_code, index_typ = self.visit(node.index, Access(frame, sym, False))
 
@@ -922,7 +912,6 @@ class CodeGenerator(ASTVisitor):
         code = ""
         code += self.emit.emit_push_iconst(array_size, frame)
 
-        # Create array
         if isinstance(first_elem_type, IntType):
             code += self.emit.emit_new_array("int")
         elif isinstance(first_elem_type, BoolType):
@@ -937,7 +926,6 @@ class CodeGenerator(ASTVisitor):
         else:
             raise IllegalOperandException(f"Unsupported array element type: {first_elem_type}")
 
-        # Assign elements
         for idx, elem in enumerate(elements):
             code += "dup\n"
             code += self.emit.emit_push_iconst(idx, frame)
@@ -966,17 +954,14 @@ class CodeGenerator(ASTVisitor):
         if not sym:
             raise IllegalOperandException(f"Undeclared identifier: {name}")
 
-        # Local / param
         if isinstance(sym.value, Index):
             code = self.emit.emit_read_var(sym.name, sym.type, sym.value.value, frame)
             return code, sym.type
 
-       # Global variable (static field)
         if isinstance(sym.value, CName):
             code = self.emit.emit_get_static(f"{sym.value.value}/{sym.name}", sym.type, frame)
             return code, sym.type
 
-        # Function reference
         if isinstance(sym.type, FunctionType):
             return "", sym.type
         raise IllegalOperandException(f"Unsupported identifier binding: {name}")        

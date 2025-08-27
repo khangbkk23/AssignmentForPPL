@@ -256,14 +256,53 @@ def test_010():
     assert result == expected
 
 def test_011():
-    """Test integer variable declaration and usage"""
-    ast = Program([], [
-        FuncDecl("main", [], VoidType(), [
-            VarDecl("x", IntType(), IntegerLiteral(100)),
-            ExprStmt(FunctionCall(Identifier("print"), [Identifier("x")]))
-        ])
-    ])
-    expected = "100"
+    """Test recursive fibonacci"""
+    ast = Program(
+        [],
+        [
+            FuncDecl(
+                "fib",
+                [Param("n", IntType())],
+                IntType(),
+                [
+                    IfStmt(
+                        BinaryOp(Identifier("n"), "<=", IntegerLiteral(1)),
+                        BlockStmt([ReturnStmt(Identifier("n"))]),
+                        [],  # không có elif
+                        BlockStmt([  # else
+                            ReturnStmt(
+                                BinaryOp(
+                                    FunctionCall(
+                                        Identifier("fib"),
+                                        [BinaryOp(Identifier("n"), "-", IntegerLiteral(1))],
+                                    ),
+                                    "+",
+                                    FunctionCall(
+                                        Identifier("fib"),
+                                        [BinaryOp(Identifier("n"), "-", IntegerLiteral(2))],
+                                    ),
+                                )
+                            )
+                        ]),
+                    )
+                ],
+            ),
+            FuncDecl(
+                "main",
+                [],
+                VoidType(),
+                [
+                    ExprStmt(
+                        FunctionCall(
+                            Identifier("print"),
+                            [FunctionCall(Identifier("fib"), [IntegerLiteral(6)])],
+                        )
+                    )
+                ],
+            ),
+        ],
+    )
+    expected = "8"
     result = CodeGenerator().generate_and_run(ast)
     assert result == expected
 
