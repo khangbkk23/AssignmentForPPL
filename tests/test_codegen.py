@@ -1039,3 +1039,85 @@ def test_069():
     expected = "new"
     result = CodeGenerator().generate_and_run(ast)
     assert result == expected
+    
+def test_071():
+    """2D integer array declaration and access"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("matrix", None, ArrayLiteral([
+                ArrayLiteral([IntegerLiteral(1), IntegerLiteral(2)]),
+                ArrayLiteral([IntegerLiteral(3), IntegerLiteral(4)])
+            ])),
+            ExprStmt(FunctionCall(Identifier("print"), [ArrayAccess(ArrayAccess(Identifier("matrix"), IntegerLiteral(0)), IntegerLiteral(1))]))
+        ])
+    ])
+    expected = "2"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_072():
+    """3D boolean array declaration and access"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("flags", None, ArrayLiteral([
+                ArrayLiteral([
+                    ArrayLiteral([BooleanLiteral(True), BooleanLiteral(False)]),
+                    ArrayLiteral([BooleanLiteral(False), BooleanLiteral(True)])
+                ]),
+                ArrayLiteral([
+                    ArrayLiteral([BooleanLiteral(False), BooleanLiteral(False)]),
+                    ArrayLiteral([BooleanLiteral(True), BooleanLiteral(True)])
+                ])
+            ])),
+            ExprStmt(FunctionCall(Identifier("print"), [ArrayAccess(ArrayAccess(ArrayAccess(Identifier("flags"), IntegerLiteral(0)), IntegerLiteral(1)), IntegerLiteral(0))]))
+        ])
+    ])
+    expected = "false"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_073():
+    """2D float array declaration, assignment and access"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("nums", None, ArrayLiteral([
+                ArrayLiteral([FloatLiteral(1.5), FloatLiteral(2.5)]),
+                ArrayLiteral([FloatLiteral(3.5), FloatLiteral(4.5)])
+            ])),
+            Assignment(ArrayAccess(ArrayAccess(Identifier("nums"), IntegerLiteral(1)), IntegerLiteral(0)), FloatLiteral(9.9)),
+            ExprStmt(FunctionCall(Identifier("print"), [ArrayAccess(ArrayAccess(Identifier("nums"), IntegerLiteral(1)), IntegerLiteral(0))]))
+        ])
+    ])
+    expected = "9.9"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_074():
+    """Nested string array declaration and access"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("words", None, ArrayLiteral([
+                ArrayLiteral([StringLiteral("hello"), StringLiteral("world")]),
+                ArrayLiteral([StringLiteral("foo"), StringLiteral("bar")])
+            ])),
+            ExprStmt(FunctionCall(Identifier("print"), [ArrayAccess(ArrayAccess(Identifier("words"), IntegerLiteral(1)), IntegerLiteral(1))]))
+        ])
+    ])
+    expected = "bar"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected
+
+def test_075():
+    """Mixed type 2D array (int array inside float array) access"""
+    ast = Program([], [
+        FuncDecl("main", [], VoidType(), [
+            VarDecl("mixed", None, ArrayLiteral([
+                ArrayLiteral([FloatLiteral(1), FloatLiteral(2)]),
+                ArrayLiteral([FloatLiteral(3.1), FloatLiteral(4.2)])
+            ])),
+            ExprStmt(FunctionCall(Identifier("print"), [ArrayAccess(ArrayAccess(Identifier("mixed"), IntegerLiteral(0)), IntegerLiteral(0))]))
+        ])
+    ])
+    expected = "1.0"
+    result = CodeGenerator().generate_and_run(ast)
+    assert result == expected

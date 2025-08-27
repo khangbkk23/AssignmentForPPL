@@ -248,7 +248,7 @@ class Emitter:
             IllegalOperandException: If type is not supported
         """
         frame.push()
-        if type(in_type) is IntType:
+        if type(in_type) is IntType or isinstance(in_type, BoolType):
             return self.jvm.emitILOAD(index)
         elif type(in_type) is FloatType:
             return self.jvm.emitFLOAD(index)
@@ -276,55 +276,71 @@ class Emitter:
         Raises:
             IllegalOperandException: If not implemented
         """
-        raise IllegalOperandException(name)
-
-    def emit_write_var(self, name: str, in_type, index: int, frame) -> str:
-        """
-        Generate code to pop a value on top of the operand stack and store it to a block-scoped variable.
-
-        Args:
-            name: The symbol entry of the variable
-            in_type: Variable type
-            index: Variable index
-            frame: Frame object for stack management
-
-        Returns:
-            Generated JVM instruction string
-
-        Raises:
-            IllegalOperandException: If type is not supported
-        """
-        frame.pop()
-
-        if type(in_type) is IntType:
-            return self.jvm.emitISTORE(index)
-        elif type(in_type) is FloatType:
-            return self.jvm.emitFSTORE(index)
-        elif (
-            type(in_type) is ArrayType
-            or type(in_type) is ClassType
-            or type(in_type) is StringType
-        ):
-            return self.jvm.emitASTORE(index)
+        frame.push()
+        if isinstance(typ, IntType) or isinstance(typ, BoolType):
+            return "iaload\n"    # integer or boolean element
+        elif isinstance(typ, FloatType):
+            return "faload\n"    # float element
+        elif isinstance(typ, (ArrayType, StringType, ClassType)):
+            return "aaload\n"    # object, string, or nested array
         else:
             raise IllegalOperandException(name)
 
-    def emit_write_var2(self, name: str, typ, frame) -> str:
+    # Xử lý lưu vào biến cục bộ (local variable)
+    def emit_write_var(self, name: str, typ, index: int, frame) -> str:
         """
-        Generate the second instruction for array cell access.
+        Store the value on top of the stack into a local variable.
 
         Args:
-            name: Variable name
-            typ: Variable type
+            name: Variable name (for error reporting)
+            typ: Type of the variable
+            index: Slot index in the local variable table
             frame: Frame object for stack management
 
         Returns:
-            Generated JVM instruction string
-
-        Raises:
-            IllegalOperandException: If not implemented
+            JVM instruction string
         """
-        raise IllegalOperandException(name)
+        frame.pop()  # pop value from operand stack
+
+        if isinstance(typ, IntType):
+            return self.jvm.emitISTORE(index)
+        elif isinstance(typ, FloatType):
+            return self.jvm.emitFSTORE(index)
+        elif isinstance(typ, BoolType):
+            # Boolean is stored as int in JVM
+            return self.jvm.emitISTORE(index)
+        elif isinstance(typ, (ArrayType, StringType, ClassType)):
+            return self.jvm.emitASTORE(index)
+        else:
+            raise IllegalOperandException(f"Cannot write variable {name} of type {typ}")
+
+
+    # Xử lý lưu vào element của array
+    def emit_write_var2(self, name: str, typ, frame) -> str:
+        """
+        Store the value on top of the stack into an array element.
+
+        Args:
+            name: Variable name or array name (for error reporting)
+            typ: Type of the element
+            frame: Frame object for stack management
+
+        Returns:
+            JVM instruction string
+        """
+        frame.pop()  # pop value from operand stack
+
+        if isinstance(typ, IntType):
+            return "iastore\n"
+        elif isinstance(typ, FloatType):
+            return "fastore\n"
+        elif isinstance(typ, BoolType):
+            return "bastore\n"  # JVM boolean array store
+        elif isinstance(typ, (ArrayType, StringType, ClassType)):
+            return "aastore\n"
+        else:
+            raise IllegalOperandException(f"Cannot store array element {name} of type {typ}")
+
 
     def emit_attribute(
         self, lexeme: str, in_type, is_final: bool, value: Optional[str] = None

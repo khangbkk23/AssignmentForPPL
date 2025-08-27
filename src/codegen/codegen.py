@@ -342,7 +342,7 @@ class CodeGenerator(ASTVisitor):
             if node.value is None:
                 raise IllegalOperandException(f"Cannot infer type for variable '{var_name}' without initializer")
             var_type = self._infer_type(node.value, symbols)
-
+        print(f"Variable type is: : {var_type}")
         index = frame.get_new_index()
         var_decl = self.emit.emit_var(index, var_name, var_type, frame.get_start_label(), frame.get_end_label())
         self.emit.print_out(var_decl)
@@ -351,15 +351,16 @@ class CodeGenerator(ASTVisitor):
 
         # initializer handling
         if node.value:
-            # if array literal: generate array then store
+            print("value is not None")
             if isinstance(node.value, ArrayLiteral):
                 code, elem_t = self.visit(node.value, Access(frame, new_symbols))
                 self.emit.print_out(code)
+                print(f"DEBUG: Writing var {var_name} of type {elem_t}")
                 self.emit.print_out(self.emit.emit_write_var(var_name, elem_t, index, frame))
             else:
-                # reuse assignment to ensure proper load/store logic
                 self.visit(Assignment(IdLValue(var_name), node.value), SubBody(frame, new_symbols))
         else:
+            print("value is None")
             init_code = ""
             if isinstance(var_type, IntType) or isinstance(var_type, BoolType):
                 init_code += self.emit.emit_push_iconst(0, frame)
@@ -373,13 +374,18 @@ class CodeGenerator(ASTVisitor):
                 et = var_type.element_type
                 if isinstance(et, IntType):
                     init_code += self.emit.emit_new_array("int")
+                elif isinstance(et, BoolType):
+                    init_code += self.emit.emit_new_array("boolean")
+                    print("Created boolean array")
                 elif isinstance(et, FloatType):
                     init_code += self.emit.emit_new_array("float")
+                elif isinstance(et, StringType):
+                    init_code += "anewarray java/lang/String\n"
+                elif isinstance(et, ArrayType):
+                    descriptor = self.emit.get_jvm_type(et)
+                    init_code += f"anewarray {descriptor}\n"
                 else:
-                    elem_internal = self.emit.get_jvm_type(et)
-                    init_code += self.emit.emit_anearray(elem_internal, frame)
-            else:
-                init_code += self.emit.emit_p(frame)
+                    raise IllegalOperandException(f"Unsupported array element type: {et}")
 
             init_code += self.emit.emit_write_var(var_name, var_type, index, frame)
             self.emit.print_out(init_code)
@@ -418,17 +424,27 @@ class CodeGenerator(ASTVisitor):
 
         # Case 2: Assignment for common variable
         else:
+            # rhs_code, rhs_type = self.visit(node.value, Access(frame, symbols))
+
+            # if isinstance(rhs_type, ArrayType):
+            #     desc = self.emit.get_jvm_type(rhs_type)
+            #     rhs_code += f"\tinvokevirtual {desc}/clone()Ljava/lang/Object;\n"
+            #     rhs_code += f"\tcheckcast {desc}\n"
+
+            # self.emit.print_out(rhs_code)
+
+            # lhs_code, _ = self.visit(node.lvalue, Access(frame, symbols))
+            # self.emit.print_out(lhs_code)
             rhs_code, rhs_type = self.visit(node.value, Access(frame, symbols))
-
-            if isinstance(rhs_type, ArrayType):
-                desc = self.emit.get_jvm_type(rhs_type)
-                rhs_code += f"\tinvokevirtual {desc}/clone()Ljava/lang/Object;\n"
-                rhs_code += f"\tcheckcast {desc}\n"
-
             self.emit.print_out(rhs_code)
 
-            lhs_code, _ = self.visit(node.lvalue, Access(frame, symbols))
-            self.emit.print_out(lhs_code)
+            # Determine variable symbol
+            var_name = node.lvalue.name
+            symbol = next((s for s in symbols if s.name == var_name), None)
+            if symbol is None:
+                raise IllegalOperandException(f"Undeclared variable: {var_name}")
+            self.emit.print_out(self.emit.emit_write_var(var_name, symbol.type, symbol.value.value, frame))
+            print("flag called them")
 
         return o
 
@@ -955,8 +971,6 @@ class CodeGenerator(ASTVisitor):
         ret_type = getattr(function_symbol.type, "return_type", VoidType())
         return code, ret_type
 
-
-
     def visit_array_access(self, node: "ArrayAccess", o: Any = None):
         frame = self.gframe(o)
         sym = self.gsym(o)
@@ -965,13 +979,22 @@ class CodeGenerator(ASTVisitor):
         index_code, index_typ = self.visit(node.index, Access(frame, sym, False))
 
         ele_type = array_typ.element_type
+        code = array_code + index_code
 
         if o.is_left:
-            code = array_code + index_code
             return code, ele_type
         else:
-            code = array_code + index_code
-            code += self.emit.emit_aload(ele_type, frame)
+            if isinstance(ele_type, IntType):
+                code += "iaload\n"
+            elif isinstance(ele_type, FloatType):
+                code += "faload\n"
+            elif isinstance(ele_type, BoolType):
+                code += "baload\n"  # boolean array in JVM uses baload
+            elif isinstance(ele_type, (ArrayType, StringType, ClassType)):
+                code += "aaload\n"
+            else:
+                raise IllegalOperandException(f"Unsupported array element type: {ele_type}")
+            
             return code, ele_type
 
     def visit_array_literal(self, node: "ArrayLiteral", o: Any = None):
@@ -1047,9 +1070,7 @@ class CodeGenerator(ASTVisitor):
         # Function reference
         if isinstance(sym.type, FunctionType):
             return "", sym.type
-        raise IllegalOperandException(f"Unsupported identifier binding: {name}")
-
-                
+        raise IllegalOperandException(f"Unsupported identifier binding: {name}")        
 
     # Literals
 

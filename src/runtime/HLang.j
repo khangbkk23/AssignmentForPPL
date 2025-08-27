@@ -5,25 +5,46 @@
 .method public static main([Ljava/lang/String;)V
 .var 0 is args [Ljava/lang/String; from Label0 to Label1
 Label0:
-.var 1 is words [Ljava/lang/String; from Label0 to Label1
-	iconst_1
-anewarray java/lang/String
+.var 1 is mixed [[F from Label0 to Label1
+	iconst_2
+anewarray [F
 dup
 	iconst_0
-	ldc "old"
+	iconst_2
+	newarray float
+dup
+	iconst_0
+	fconst_1
+fastore
+dup
+	iconst_1
+	fconst_2
+fastore
+aastore
+dup
+	iconst_1
+	iconst_2
+	newarray float
+dup
+	iconst_0
+	ldc 3.1000
+fastore
+dup
+	iconst_1
+	ldc 4.2000
+fastore
 aastore
 	astore_1
 	aload_1
 	iconst_0
-	ldc "new"
-aastore
-	aload_1
+aaload
 	iconst_0
-	aaload
+faload
+	invokestatic io/float2str(F)Ljava/lang/String;
 	invokestatic io/print(Ljava/lang/String;)V
 	return
 Label1:
-.limit stack 8
+.limit stack 23
 .limit locals 2
 .end method
 

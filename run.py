@@ -675,6 +675,7 @@ class HLangBuilder:
                 "--timeout=10",
                 "--self-contained-html",
                 "-v",
+                "-s",
             ],
             check=False,
         )  # Don't fail on test failures
