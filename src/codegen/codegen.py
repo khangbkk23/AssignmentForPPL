@@ -661,32 +661,36 @@ class CodeGenerator(ASTVisitor):
 
         # boolean short-circuit &&, ||
         if op in ["&&", "||"]:
-            left_code, left_type = self.visit(node.left, Access(frame, sym))
-            label_check = frame.get_new_label()
+            left_code, _ = self.visit(node.left, Access(frame, sym))
+            label_true = frame.get_new_label()
             label_false = frame.get_new_label()
             label_end = frame.get_new_label()
-
+            
             code = left_code
+            
             if op == "&&":
                 code += self.emit.emit_if_false(label_false, frame)
-                right_code, _ = self.visit(node.right, Access(frame, sym))
+                right_code, right_type = self.visit(node.right, Access(frame, sym))
                 code += right_code
+                if isinstance(right_type, VoidType):
+                    code += self.emit.emit_push_iconst(1, frame)
                 code += self.emit.emit_if_false(label_false, frame)
                 code += self.emit.emit_push_iconst(1, frame)
                 code += self.emit.emit_goto(label_end, frame)
+                code += self.emit.emit_label(label_false, frame)
+                code += self.emit.emit_push_iconst(0, frame)
             else:  # op == "||"
-                code += self.emit.emit_if_false(label_check, frame)
-                code += self.emit.emit_push_iconst(1, frame)
-                code += self.emit.emit_goto(label_end, frame)
-                code += self.emit.emit_label(label_check, frame)
-                right_code, _ = self.visit(node.right, Access(frame, sym))
+                code += self.emit.emit_if_true(label_true, frame)
+                right_code, right_type = self.visit(node.right, Access(frame, sym))
                 code += right_code
-                code += self.emit.emit_if_false(label_false, frame)
-                code += self.emit.emit_push_iconst(1, frame)
+                if isinstance(right_type, VoidType):
+                    code += self.emit.emit_push_iconst(1, frame)
+                code += self.emit.emit_if_true(label_true, frame)
+                code += self.emit.emit_push_iconst(0, frame)
                 code += self.emit.emit_goto(label_end, frame)
-
-            code += self.emit.emit_label(label_false, frame)
-            code += self.emit.emit_push_iconst(0, frame)
+                code += self.emit.emit_label(label_true, frame)
+                code += self.emit.emit_push_iconst(1, frame)
+            
             code += self.emit.emit_label(label_end, frame)
             return code, BoolType()
 
@@ -714,16 +718,12 @@ class CodeGenerator(ASTVisitor):
 
         if op == '/':
             code = ""
-            # push left then convert if needed
             code += left_code
             if isinstance(left_type, IntType):
                 code += self.emit.emit_i2f(frame)
-            # push right then convert if needed
             code += right_code
             if isinstance(right_type, IntType):
                 code += self.emit.emit_i2f(frame)
-            # emit float divide (your emitter may have a helper; use it)
-            # if your emitter uses emit_mul_op for '/' too, call with FloatType
             code += self.emit.emit_mul_op('/', FloatType(), frame)
             return code, FloatType()    
         

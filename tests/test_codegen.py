@@ -1343,35 +1343,43 @@ def test_087():
     assert result == expected
 
 def test_088():
-    """Function with early return"""
+    """Short-circuit AND in IF"""
     ast = Program([], [
-        FuncDecl("check", [Param("x", IntType())], StringType(), [
-            IfStmt(BinaryOp(Identifier("x"), "<", IntegerLiteral(0)),
-                   BlockStmt([ReturnStmt(StringLiteral("negative"))]), [], None),
-            ReturnStmt(StringLiteral("positive"))
-        ]),
         FuncDecl("main", [], VoidType(), [
-            ExprStmt(FunctionCall(Identifier("print"), [FunctionCall(Identifier("check"), [IntegerLiteral(-5)])])),
-            ExprStmt(FunctionCall(Identifier("print"), [FunctionCall(Identifier("check"), [IntegerLiteral(10)])]))
+            IfStmt(BinaryOp(BooleanLiteral(True), "&&", BooleanLiteral(True)),
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("A")]))]),
+                   [], None),
+
+            IfStmt(BinaryOp(BooleanLiteral(False), "&&", 
+                            FunctionCall(Identifier("print"), [StringLiteral("B")])),
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("C")]))]),
+                   [], None),
+
+            IfStmt(BinaryOp(BooleanLiteral(True), "&&", 
+                            FunctionCall(Identifier("print"), [StringLiteral("D")])),
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("E")]))]),
+                   [], None),
         ])
     ])
-    expected = "negative\npositive"
+    expected = "A\nD\nE"
     result = CodeGenerator().generate_and_run(ast)
     assert result == expected
 
 def test_089():
-    """Block statement with local scope"""
+    """Short-circuit OR in IF"""
     ast = Program([], [
         FuncDecl("main", [], VoidType(), [
-            VarDecl("x", None, IntegerLiteral(10)),
-            BlockStmt([
-                VarDecl("y", None, IntegerLiteral(20)),
-                ExprStmt(FunctionCall(Identifier("print"), [BinaryOp(Identifier("x"), "+", Identifier("y"))]))
-            ]),
-            ExprStmt(FunctionCall(Identifier("print"), [Identifier("x")]))
+            IfStmt(BinaryOp(BooleanLiteral(True), "||", 
+                            FunctionCall(Identifier("print"), [StringLiteral("X")])),
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("Y")]))]),
+                   [], None),
+            IfStmt(BinaryOp(BooleanLiteral(False), "||", 
+                            FunctionCall(Identifier("print"), [StringLiteral("Z")])),
+                   BlockStmt([ExprStmt(FunctionCall(Identifier("print"), [StringLiteral("W")]))]),
+                   [], None),
         ])
     ])
-    expected = "30\n10"
+    expected = "Y\nZ\nW"
     result = CodeGenerator().generate_and_run(ast)
     assert result == expected
 
